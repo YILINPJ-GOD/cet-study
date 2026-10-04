@@ -6,6 +6,7 @@ App.Views.vocab = App.Views.vocab || {};
   let flash = null;     // {stack:[entry], idx, flipped}
 
   const V = App.Views.vocab;
+  V.reset = function () { tab = 'task'; session = null; flash = null; };
   V.render = function (el) {
     el.innerHTML = '<div class="tabs">' +
       [['task', '🎯 今日任务'], ['bank', '📖 词库'], ['flash', '⚡ 速刷'], ['stat', '📊 统计']]
@@ -169,7 +170,40 @@ App.Views.vocab = App.Views.vocab || {};
     el.querySelector('#back').onclick = () => { session = null; V.render(el); };
   }
 
-  /* ---------- 词库浏览（按档位筛选） ---------- */
+  /* ---------- 词库浏览（按档位筛选 + 自定义词导入） ---------- */
+  App.importCustomCSV = function (text) {
+    const lines = String(text || '').split(/\r?\n/).map(l => l.trim()).filter(l => l && !l.startsWith('#'));
+    App.store.customWords = App.store.customWords || [];
+    // 先清词库缓存，确保去重基于最新词库状态
+    App._words = null; App._wmap = null;
+    const existing = new Set(App.store.customWords.map(c => c.w));
+    // 与主词库/词典已有词去重（重复导入无意义）
+    const bank = App.WMAP();
+    let added = 0, dup = 0, bad = 0;
+    for (const line of lines) {
+      // 每行 1-4 列：单词[,音标][,词性][,释义]，支持逗号/中文逗号/Tab 分隔
+      const parts = line.split(/[,\t，]/).map(s => s.trim()).filter(s => s !== '');
+      if (!parts.length) continue;
+      const w = parts[0].toLowerCase().replace(/[^a-z'-]/g, '');
+      if (!w || w.length < 2) { bad++; continue; }
+      if (existing.has(w) || bank[w]) { dup++; continue; }
+      // 音标/词性/释义按列特征识别：斜杠包裹或含 ɑɪʃ 视为音标；以 n./v./adj. 等开头的为词性
+      let ipa = '', pos = '', gloss = '';
+      for (const p of parts.slice(1)) {
+        if (!ipa && /^\/.+\/$/.test(p)) { ipa = p.replace(/\//g, ''); continue; }
+        if (!pos && /^(n|v|adj|adv|prep|conj|pron|num|vt|vi|aux)\./i.test(p)) { pos = p; continue; }
+        if (!gloss) { gloss = p; continue; }
+        gloss += '；' + p;
+      }
+      App.store.customWords.push({ w, ipa, pos, gloss: gloss || '（自定义词，未附释义）' });
+      existing.add(w);
+      added++;
+    }
+    App._words = null; App._wmap = null;
+    App.save();
+    return { added, dup, bad };
+  };
+
   function renderBank(el) {
     const exam = App.store.profile.exam || 'cet6';
     const tiers = App.banksOf(exam);
@@ -178,11 +212,16 @@ App.Views.vocab = App.Views.vocab || {};
       <div class="card">
         <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin-bottom:12px">
           <input class="txt" id="kw" placeholder="搜索单词或释义…" style="flex:1;min-width:200px" value="">
+          <button class="btn ghost sm" id="csvBtn">⬆ 导入自定义词</button>
+          <input type="file" id="csvFile" accept=".csv,.txt" style="display:none">
+        </div>
+        <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin-bottom:12px">
           <div id="lvChips">
             <button class="btn sm" data-tier="">全部</button>
-            ${tiers.map(t => '<button class="btn sm plain" data-tier="' + t + '">' + App.TIERS[t].label + '</button>').join('')}
+            ${(App.store.customWords && App.store.customWords.length ? ['custom'] : []).concat(tiers).map(t => '<button class="btn sm plain" data-tier="' + t + '">' + App.TIERS[t].label + '</button>').join('')}
           </div>
         </div>
+        <div id="csvMsg" class="note" style="margin-bottom:8px">导入格式：每行一个词，可选「单词,音标,词性,释义」（逗号/Tab 分隔均可），# 开头为注释行。导入的词将<b>优先</b>进入每日背词队列。</div>
         <div id="wordList"></div>
         <div style="text-align:center;margin-top:12px"><button class="btn plain" id="more">加载更多</button></div>
       </div>`;
@@ -198,6 +237,7 @@ App.Views.vocab = App.Views.vocab || {};
         const inBook = App.dict.inBook(w.w);
         const tierLabel = (App.TIERS[w.tier] || {}).label || '';
         const senseMark = w.examSense ? ' <span class="badge warn">常考义</span>' : '';
+        const delBtn = w.tier === 'custom' ? '<button class="btn danger sm" data-delcw="' + w.w + '">删除</button>' : '';
         return `<div class="list-row" style="cursor:pointer" data-w="${w.w}">
           <div style="flex:1;min-width:0">
             <b>${w.w}</b> <span class="note">/${w.ipa}/ ${w.pos}</span>
@@ -205,13 +245,24 @@ App.Views.vocab = App.Views.vocab || {};
             ${st.cls ? '<span class="badge ' + st.cls + '">' + st.label + '</span>' : ''}
             <div class="note" style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${App.esc(w.gloss)}${senseMark}</div>
           </div>
-          <span class="note">${tierLabel}</span>
+          <span class="note">${tierLabel}</span>${delBtn}
         </div>`;
       }).join('') || '<div class="empty">没有找到匹配的单词</div>';
       list.querySelectorAll('.list-row').forEach(r => r.onclick = (ev) => {
+        if (ev.target.closest('[data-delcw]')) return;
         ev.stopPropagation();
         const rect = r.getBoundingClientRect();
         App.dict.open(r.dataset.w, Math.max(20, rect.right - 340), rect.top + 8, '词库浏览');
+      });
+      list.querySelectorAll('[data-delcw]').forEach(b => b.onclick = (ev) => {
+        ev.stopPropagation();
+        const w = b.dataset.delcw;
+        if (!App.confirmBox('从我的词库删除「' + w + '」？（学习记录一并清除）')) return;
+        App.store.customWords = (App.store.customWords || []).filter(c => c.w !== w);
+        delete App.store.srs[w];
+        App._words = null; App._wmap = null;
+        App.save();
+        paint();
       });
       el.querySelector('#more').style.display = ws.length >= shown ? '' : 'none';
     };
@@ -222,6 +273,18 @@ App.Views.vocab = App.Views.vocab || {};
     });
     el.querySelector('#kw').oninput = e => { kw = e.target.value.trim(); shown = 80; paint(); };
     el.querySelector('#more').onclick = () => { shown += 120; paint(); };
+    el.querySelector('#csvBtn').onclick = () => el.querySelector('#csvFile').click();
+    el.querySelector('#csvFile').onchange = (e) => {
+      const f = e.target.files[0];
+      if (!f) return;
+      const rd = new FileReader();
+      rd.onload = () => {
+        const r = App.importCustomCSV(rd.result);
+        App.toast('导入完成：新增 ' + r.added + ' · 重复跳过 ' + r.dup + ' · 无效 ' + r.bad);
+        V.render(el);
+      };
+      rd.readAsText(f);
+    };
     paint();
   }
 

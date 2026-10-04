@@ -114,6 +114,8 @@ App.grader.gradeWriting = function (text) {
   const items = [];
   const add = (type, title, detail) => items.push({ type, title, detail });
   let score = 70;
+  const dims = {};   // 六维度分（0-100）：篇幅/结构/衔接/句式/用词/拼写规范
+  let hits = [];     // 命中的高级句式
 
   const words = App.grader.tokenize(text);
   const wc = words.length;
@@ -122,69 +124,71 @@ App.grader.gradeWriting = function (text) {
   const sLens = sentences.map(s => App.grader.tokenize(s).length);
 
   // 1 词数
-  if (wc < 100) { score -= 14; add('bad', '篇幅不足', '全文仅 ' + wc + ' 词。六级要求 150–200 词，字数不足会直接拉低内容分。把每个分论点补一句解释或例证。'); }
-  else if (wc < 150) { score -= 4; add('warn', '篇幅偏短', '目前 ' + wc + ' 词，距 150 词下限还差一点，建议再扩展一个例证或让步段。'); }
-  else if (wc <= 200) { score += 8; add('good', '篇幅达标', '全文 ' + wc + ' 词，正好落在 150–200 词的理想区间。'); }
-  else if (wc <= 230) { score += 2; add('good', '篇幅合适', '全文 ' + wc + ' 词，内容充实，注意誊写时间即可。'); }
-  else { score -= 3; add('warn', '篇幅偏长', '全文 ' + wc + ' 词，超出上限较多，考场写不完反而丢分，学会精炼例证。'); }
+  if (wc < 100) { score -= 14; dims['篇幅'] = 35; add('bad', '篇幅不足', '全文仅 ' + wc + ' 词。六级要求 150–200 词，字数不足会直接拉低内容分。把每个分论点补一句解释或例证。'); }
+  else if (wc < 150) { score -= 4; dims['篇幅'] = 60; add('warn', '篇幅偏短', '目前 ' + wc + ' 词，距 150 词下限还差一点，建议再扩展一个例证或让步段。'); }
+  else if (wc <= 200) { score += 8; dims['篇幅'] = 95; add('good', '篇幅达标', '全文 ' + wc + ' 词，正好落在 150–200 词的理想区间。'); }
+  else if (wc <= 230) { score += 2; dims['篇幅'] = 88; add('good', '篇幅合适', '全文 ' + wc + ' 词，内容充实，注意誊写时间即可。'); }
+  else { score -= 3; dims['篇幅'] = 65; add('warn', '篇幅偏长', '全文 ' + wc + ' 词，超出上限较多，考场写不完反而丢分，学会精炼例证。'); }
 
   // 2 结构
-  if (paras.length === 3) { score += 4; add('good', '结构清晰', '全文三段，符合「引入—论证—总结」的经典结构。'); }
-  else if (paras.length >= 2) { add('info', '段落提示', '检测到 ' + paras.length + ' 个自然段。六级作文建议三段式：引出话题 → 展开论证 → 总结升华。'); }
-  else { score -= 5; add('bad', '缺少分段', '全文只有一段。请按「开头—主体—结尾」分段，阅卷老师非常看重结构分。'); }
+  if (paras.length === 3) { score += 4; dims['结构'] = 92; add('good', '结构清晰', '全文三段，符合「引入—论证—总结」的经典结构。'); }
+  else if (paras.length >= 2) { dims['结构'] = 70; add('info', '段落提示', '检测到 ' + paras.length + ' 个自然段。六级作文建议三段式：引出话题 → 展开论证 → 总结升华。'); }
+  else { score -= 5; dims['结构'] = 40; add('bad', '缺少分段', '全文只有一段。请按「开头—主体—结尾」分段，阅卷老师非常看重结构分。'); }
 
   // 3 衔接词
   const lower = text.toLowerCase();
   const usedConn = G_CONNECTIVES.filter(([c]) => lower.includes(c));
   const distinct = new Set(usedConn.map(c => c[1])).size;
-  if (usedConn.length >= 6 && distinct >= 3) { score += 8; add('good', '衔接丰富', '使用了 ' + usedConn.length + ' 处衔接词（如 ' + usedConn.slice(0, 4).map(c => c[0]).join('、') + '），逻辑连贯性好。'); }
-  else if (usedConn.length >= 3) { score += 3; add('info', '衔接尚可', '检测到 ' + usedConn.length + ' 处衔接词。试着增加 However / Moreover / As a result 等不同类别的衔接，让段落内逻辑更顺。'); }
-  else { score -= 6; add('warn', '衔接不足', '几乎没检测到衔接词。句子之间建议补充 However（转折）、Moreover（递进）、As a result（因果）等过渡。'); }
+  if (usedConn.length >= 6 && distinct >= 3) { score += 8; dims['衔接'] = 92; add('good', '衔接丰富', '使用了 ' + usedConn.length + ' 处衔接词（如 ' + usedConn.slice(0, 4).map(c => c[0]).join('、') + '），逻辑连贯性好。'); }
+  else if (usedConn.length >= 3) { score += 3; dims['衔接'] = 75; add('info', '衔接尚可', '检测到 ' + usedConn.length + ' 处衔接词。试着增加 However / Moreover / As a result 等不同类别的衔接，让段落内逻辑更顺。'); }
+  else { score -= 6; dims['衔接'] = 50; add('warn', '衔接不足', '几乎没检测到衔接词。句子之间建议补充 However（转折）、Moreover（递进）、As a result（因果）等过渡。'); }
 
   // 4 句式多样性
+  dims['句式'] = 70;
   if (sLens.length >= 3) {
     const avg = sLens.reduce((a, b) => a + b, 0) / sLens.length;
     const sd = Math.sqrt(sLens.reduce((a, b) => a + (b - avg) ** 2, 0) / sLens.length);
     const longS = sLens.filter(l => l > 32).length;
-    if (sd >= 6.5) { score += 6; add('good', '长短句结合', '句子长度富于变化（平均 ' + avg.toFixed(1) + ' 词/句），读起来有节奏感。'); }
-    else { score -= 4; add('warn', '句长单一', '各句长度接近（平均 ' + avg.toFixed(1) + ' 词/句）。试着把某些短句合并成定语从句，或用 Only by.../Not until... 倒装句打破节奏。'); }
-    if (longS > 0) { score -= Math.min(longS, 4); add('warn', '存在过长句', longS + ' 个句子超过 32 词，容易产生语法错误。建议用逗号拆分或改为两句。'); }
-    if (avg < 9) { score -= 2; add('warn', '句式过短', '平均每句不到 9 词，多为简单句。用 with 复合结构、定语从句、分词短语升级其中两三句。'); }
+    if (sd >= 6.5) { score += 6; dims['句式'] += 12; add('good', '长短句结合', '句子长度富于变化（平均 ' + avg.toFixed(1) + ' 词/句），读起来有节奏感。'); }
+    else { score -= 4; dims['句式'] -= 14; add('warn', '句长单一', '各句长度接近（平均 ' + avg.toFixed(1) + ' 词/句）。试着把某些短句合并成定语从句，或用 Only by.../Not until... 倒装句打破节奏。'); }
+    if (longS > 0) { score -= Math.min(longS, 4); dims['句式'] -= Math.min(longS * 3, 15); add('warn', '存在过长句', longS + ' 个句子超过 32 词，容易产生语法错误。建议用逗号拆分或改为两句。'); }
+    if (avg < 9) { score -= 2; dims['句式'] -= 8; add('warn', '句式过短', '平均每句不到 9 词，多为简单句。用 with 复合结构、定语从句、分词短语升级其中两三句。'); }
+    // 6 句式/模板命中（并入句式维度）
+    hits = G_PATTERNS.filter(p => p.re.test(text)).map(p => p.name);
+    if (hits.length >= 3) { score += 6; dims['句式'] += 10; add('good', '亮点句式', '检测到 ' + hits.length + ' 处高级句式：' + hits.slice(0, 3).join('；') + '。'); }
+    else if (hits.length >= 1) { add('info', '句式提示', '检测到 ' + hits.length + ' 处高级句式（' + hits[0] + '）。再埋入一个倒装或强调句，作文档次会明显提升。'); }
+    else { score -= 2; dims['句式'] -= 8; add('warn', '句式保守', '未检测到倒装、强调、虚拟等亮点句式。参考「进阶句式」库，至少套用 1–2 个。'); }
   }
 
   // 5 高级词汇
   const advWords = words.filter(w => G_ADV.has(w) || (w.length >= 9 && !G_STOP.has(w)));
   const advRatio = wc ? advWords.length / wc : 0;
-  if (advRatio >= 0.08) { score += 6; add('good', '用词地道', '高级词汇占比约 ' + Math.round(advRatio * 100) + '%（如 ' + advWords.slice(0, 5).join('、') + '），词汇多样性出色。'); }
-  else if (advRatio >= 0.04) { add('info', '词汇提示', '高级词汇占比约 ' + Math.round(advRatio * 100) + '%。把部分基础词替换为更精准的表达会更有亮点。'); }
-  else { score -= 2; add('warn', '词汇平淡', '全文以基础词汇为主。尝试替换：important→crucial、think→argue、more and more→a growing number of。'); }
-
-  // 6 句式/模板命中
-  const hits = G_PATTERNS.filter(p => p.re.test(text)).map(p => p.name);
-  if (hits.length >= 3) { score += 6; add('good', '亮点句式', '检测到 ' + hits.length + ' 处高级句式：' + hits.slice(0, 3).join('；') + '。'); }
-  else if (hits.length >= 1) { add('info', '句式提示', '检测到 ' + hits.length + ' 处高级句式（' + hits[0] + '）。再埋入一个倒装或强调句，作文档次会明显提升。'); }
-  else { score -= 2; add('warn', '句式保守', '未检测到倒装、强调、虚拟等亮点句式。参考「进阶句式」库，至少套用 1–2 个。'); }
+  if (advRatio >= 0.08) { score += 6; dims['用词'] = 92; add('good', '用词地道', '高级词汇占比约 ' + Math.round(advRatio * 100) + '%（如 ' + advWords.slice(0, 5).join('、') + '），词汇多样性出色。'); }
+  else if (advRatio >= 0.04) { dims['用词'] = 75; add('info', '词汇提示', '高级词汇占比约 ' + Math.round(advRatio * 100) + '%。把部分基础词替换为更精准的表达会更有亮点。'); }
+  else { score -= 2; dims['用词'] = 55; add('warn', '词汇平淡', '全文以基础词汇为主。尝试替换：important→crucial、think→argue、more and more→a growing number of。'); }
 
   // 7 拼写
+  dims['拼写规范'] = 100;
   const unknown = App.grader.spellCheck(text);
-  if (unknown.length) { score -= Math.min(unknown.length * 3, 12); add('bad', '疑似拼写问题', '以下单词不在词库中，请核对拼写：' + unknown.join('、') + '。（专有名词可忽略）'); }
+  if (unknown.length) { score -= Math.min(unknown.length * 3, 12); dims['拼写规范'] -= Math.min(unknown.length * 8, 40); add('bad', '疑似拼写问题', '以下单词不在词库中，请核对拼写：' + unknown.join('、') + '。（专有名词可忽略）'); }
 
-  // 8 用词重复
+  // 8 用词重复（并入用词维度）
   const freq = {};
   for (const w of words) if (!G_STOP.has(w) && w.length >= 4) freq[w] = (freq[w] || 0) + 1;
   const overused = Object.keys(freq).filter(w => freq[w] >= 5).sort((a, b) => freq[b] - freq[a]).slice(0, 3);
   for (const w of overused) {
     score -= 2;
+    dims['用词'] -= 4;
     const syn = G_SYNONYMS[w];
     add('warn', '「' + w + '」重复 ' + freq[w] + ' 次', syn ? '建议交替使用：' + syn + '。' : '尝试用同义词或代词替换，避免用词单调。');
   }
 
-  // 9 格式与硬伤
+  // 9 格式与硬伤（并入拼写规范维度）
   const cn = (text.match(/[\u4e00-\u9fff]/g) || []).length;
-  if (cn > 5) { score -= 15; add('bad', '混入中文', '检测到 ' + cn + ' 个中文字符——写作时记得切换输入法，中文词阅卷时按错误处理。'); }
+  if (cn > 5) { score -= 15; dims['拼写规范'] -= 40; add('bad', '混入中文', '检测到 ' + cn + ' 个中文字符——写作时记得切换输入法，中文词阅卷时按错误处理。'); }
   const badCaps = (text.match(/[.!?]\s+[a-z]/g) || []).length;
   const startLower = /^[a-z]/.test(text.trim());
-  if (badCaps || startLower) { score -= Math.min(2 * (badCaps + (startLower ? 1 : 0)), 6); add('warn', '句首未大写', '检测到 ' + (badCaps + (startLower ? 1 : 0)) + ' 处句首小写。每个句子的首字母务必大写。'); }
+  if (badCaps || startLower) { score -= Math.min(2 * (badCaps + (startLower ? 1 : 0)), 6); dims['拼写规范'] -= Math.min((badCaps + (startLower ? 1 : 0)) * 5, 20); add('warn', '句首未大写', '检测到 ' + (badCaps + (startLower ? 1 : 0)) + ' 处句首小写。每个句子的首字母务必大写。'); }
   const noSpace = (text.match(/[,;][A-Za-z]/g) || []).length + (text.match(/[a-z]\.[A-Z]/g) || []).length;
   if (noSpace > 2) { add('warn', '标点后缺空格', '检测到 ' + noSpace + ' 处逗号/句号后直接接单词，标点后应空一格。'); }
   const aAnErr = (text.match(/\ba\s+[aeiou]\w+/gi) || []).filter(t => !/^an? hour/i.test(t)).length;
@@ -192,10 +196,11 @@ App.grader.gradeWriting = function (text) {
   if (!/[.!?]\s*$/.test(text.trim())) { add('info', '结尾标点', '全文结尾似乎缺句号，记得收尾补上。'); }
 
   score = Math.max(40, Math.min(96, Math.round(score)));
+  const dimList = ['篇幅', '结构', '衔接', '句式', '用词', '拼写规范'].map(n => ({ name: n, score: Math.max(25, Math.min(100, Math.round(dims[n] || 70))) }));
   const grade = score >= 90 ? '优秀' : score >= 80 ? '良好' : score >= 70 ? '中等' : score >= 60 ? '基本合格' : '待提高';
   const band = score >= 90 ? '13–14 分档' : score >= 80 ? '11–12 分档' : score >= 70 ? '9–10 分档' : score >= 60 ? '7–8 分档' : '6 分档以下';
   const summary = '综合评分 ' + score + '/100（预估 ' + band + '），等级：' + grade + '。全文 ' + wc + ' 词、' + sentences.length + ' 句、' + paras.length + ' 段。';
-  return { score, grade, band, summary, items, wc, hits, unknown };
+  return { score, grade, band, summary, items, wc, hits, unknown, dims: dimList };
 };
 
 /* ---------- 翻译批改 ---------- */
@@ -255,10 +260,16 @@ App.grader.gradeTranslation = function (userText, passage) {
   score = Math.max(35, Math.min(96, Math.round(score)));
   const grade = score >= 90 ? '优秀' : score >= 80 ? '良好' : score >= 70 ? '中等' : score >= 60 ? '基本合格' : '待提高';
   const band = score >= 90 ? '13–14 分档' : score >= 80 ? '11–12 分档' : score >= 70 ? '9–10 分档' : score >= 60 ? '7–8 分档' : '6 分档以下';
+  const dimList = [
+    { name: '关键表达', score: Math.max(25, Math.min(100, Math.round(45 + ratio2 * 55))) },
+    { name: '篇幅信息', score: ratio < 0.55 ? 40 : ratio < 0.8 ? 62 : ratio <= 1.35 ? 90 : 62 },
+    { name: '断句衔接', score: Math.abs(userS - refS) <= 1 ? 88 : 68 },
+    { name: '拼写规范', score: Math.max(30, 100 - unknown.length * 8 - (cn > 0 ? 40 : 0) - (startLower ? 5 : 0)) }
+  ];
   return {
     score, grade, band,
     estCET: Math.round(score / 100 * 106.5),
     summary: '综合评分 ' + score + '/100（预估 ' + band + '），关键表达命中 ' + hits + '/' + passage.keys.length + '。',
-    missedKeys: detail, items, ratio
+    missedKeys: detail, items, ratio, dims: dimList
   };
 };

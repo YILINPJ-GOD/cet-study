@@ -44,8 +44,9 @@ App.newWords = function () {
   let quota = daily - done;
   if (dueCount > 20) quota = Math.ceil(quota / 2);
   const lv = App.store.profile.startLevel || 1;
-  const tierOrder = exam === 'cet4' ? ['t4c', 't4h', 't4s']
-    : (lv === 3 ? ['t6h', 't6s', 't4c'] : lv === 2 ? ['t6h', 't4c', 't6s'] : ['t4c', 't6h', 't6s']);
+  const tierOrder = exam === 'cet4'
+    ? (App.store.customWords && App.store.customWords.length ? ['custom'] : []).concat(['t4c', 't4h', 't4s'])
+    : (App.store.customWords && App.store.customWords.length ? ['custom'] : []).concat(lv === 3 ? ['t6h', 't6s', 't4c'] : lv === 2 ? ['t6h', 't4c', 't6s'] : ['t4c', 't6h', 't6s']);
   const pool = [];
   for (const t of tierOrder) pool.push(...App.allWords().filter(e => e.tier === t && !App.store.srs[e.w]));
   return pool.slice(0, quota);
@@ -132,7 +133,7 @@ App.vocabStats = function () {
 App.typeTrend = function (n) {
   const types = { careful: '仔细阅读', matching: '长篇匹配', cloze: '选词填空', listening: '听力', vocab: '词汇' };
   const byDate = {};
-  for (const r of App.store.practice.reading) {
+  for (const r of (App.store.practice.reading || [])) {
     const t = App.today(r.d ? new Date(r.d) : undefined);
     (byDate[t] = byDate[t] || {})[r.type] = byDate[t][r.type] || [0, 0];
     byDate[t][r.type][0] += r.c; byDate[t][r.type][1] += r.t;
@@ -142,7 +143,7 @@ App.typeTrend = function (n) {
     (byDate[t] = byDate[t] || {})['listening'] = byDate[t]['listening'] || [0, 0];
     byDate[t]['listening'][0] += r.c; byDate[t]['listening'][1] += r.t;
   }
-  for (const r of App.store.practice.vocab.filter(v => !v.new)) {
+  for (const r of (App.store.practice.vocab || []).filter(v => !v.new)) {
     const t = App.today(r.d ? new Date(r.d) : undefined);
     (byDate[t] = byDate[t] || {})['vocab'] = byDate[t]['vocab'] || [0, 0];
     byDate[t]['vocab'][0] += r.ok ? 1 : 0; byDate[t]['vocab'][1] += 1;

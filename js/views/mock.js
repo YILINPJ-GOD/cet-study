@@ -15,6 +15,7 @@ App.Views.mock = App.Views.mock || {};
   let run = null; // {setId, secIdx, results:{writing:{score},careful:{c,t},...}}
 
   const V = App.Views.mock;
+  V.reset = function () { run = null; };
   V.render = function (el) {
     if (run) return renderRun(el);
     el.innerHTML = `

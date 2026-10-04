@@ -6,6 +6,7 @@ App.Views.translation = App.Views.translation || {};
 
   const THEMES = ['全部', '文化历史', '社会发展', '科技经济'];
   const V = App.Views.translation;
+  V.reset = function () { tab = 'practice'; };
 
   V.render = function (el, param) {
     if (param && param.pid) return renderPractice(el, param.pid);
@@ -121,7 +122,12 @@ App.Views.translation = App.Views.translation || {};
         html += '<h3 style="font-size:13.5px;margin-top:14px">未译出的关键表达（已存入积累本）</h3>' +
           r.missedKeys.map(k => `<div class="fb-item warn"><b>${App.esc(k.zh)}</b><span>→ <b>${App.esc(k.en)}</b></span></div>`).join('');
       }
-      html += r.items.map(it => `<div class="fb-item ${it.type}"><b>${icons[it.type]} ${App.esc(it.title)}</b><span>${App.esc(it.detail)}</span></div>`).join('');
+      if (r.dims) {
+        html += '<div class="grid2" style="grid-template-columns:280px 1fr;align-items:center"><div><b style="font-size:13.5px;display:block;text-align:center;margin-bottom:4px">维度画像</b>' + App.charts.radar(r.dims) + '</div><div>' +
+          r.items.map(it => `<div class="fb-item ${it.type}"><b>${icons[it.type]} ${App.esc(it.title)}</b><span>${App.esc(it.detail)}</span></div>`).join('') + '</div></div>';
+      } else {
+        html += r.items.map(it => `<div class="fb-item ${it.type}"><b>${icons[it.type]} ${App.esc(it.title)}</b><span>${App.esc(it.detail)}</span></div>`).join('');
+      }
     }
     html += '<h3 style="font-size:13.5px;margin-top:14px">本篇关键表达</h3><div style="display:flex;flex-wrap:wrap;gap:8px">' +
       p.keys.map(k => '<span class="tag" title="' + App.esc(k.en) + '">' + App.esc(k.zh) + ' → ' + App.esc(k.en) + '</span>').join('') + '</div>';
@@ -132,7 +138,10 @@ App.Views.translation = App.Views.translation || {};
   function renderBook(el) {
     const byTheme = {};
     for (const e of App.store.exprs) (byTheme[e.theme] = byTheme[e.theme] || []).push(e);
-    el.innerHTML = `<div class="card">
+    const done = App.store.translations;
+    const trend = done.length >= 2 ? '<div class="card"><h3>📈 翻译成绩趋势 <span class="sub">' + done.length + ' 次练习</span></h3>' +
+      App.charts.line({ series: [{ name: '批改得分', color: '#0d9488', data: done.map((t, i) => ({ x: (t.date || '') + ' #' + (done.length - i), y: t.score })) }], max: 100, min: 0 }) + '</div>' : '';
+    el.innerHTML = trend + `<div class="card">
       <h3>📒 常用表达积累本 <span class="sub">练习与浏览过的表达自动收录 · 共 ${App.store.exprs.length} 条</span></h3>
       ${App.store.exprs.length ? Object.keys(byTheme).map(th => `
         <h3 style="font-size:13.5px;margin-top:12px"><span class="tag">${th}</span> ${byTheme[th].length} 条</h3>

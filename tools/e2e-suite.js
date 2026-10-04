@@ -379,4 +379,159 @@ window.__E2E = {
       App.audb._broken = false;
     }
   });
+
+  /* ---------- v1.2.0：数据安全 / 批改可视化 / 词汇增强 / 听力回看定位 / PWA ---------- */
+  T.add('DS-01 备份导入深度校验（坏数据被拒/好数据通过）', async () => {
+    const bad1 = new Blob(['not json'], { type: 'application/json' });
+    const bad2 = new Blob([JSON.stringify({ version: 1 })], { type: 'application/json' });
+    const bad3 = new Blob([JSON.stringify({ version: 1, profile: {}, srs: { word: { b: 'x' } }, days: {} })], { type: 'application/json' });
+    const ok = new Blob([JSON.stringify({ version: 1, profile: { exam: 'cet6' }, srs: { word: { b: 1, due: 0, c: 1, w: 0 } }, days: {}, essays: [], translations: [], mocks: [], exprs: [], practice: {} })], { type: 'application/json' });
+    const toFile = b => new File([b], 't.json');
+    let toasts = [];
+    const oldToast = App.toast;
+    App.toast = m => toasts.push(String(m));
+    const oldConfirm = window.confirm; window.confirm = () => false; // 拒绝覆盖
+    App.importBackup(toFile(bad1));
+    App.importBackup(toFile(bad2));
+    App.importBackup(toFile(bad3));
+    await new Promise(r => setTimeout(r, 50));
+    assert(toasts.some(t => t.includes('不是有效的 JSON')), '坏 JSON 应被拒');
+    assert(toasts.some(t => t.includes('缺少 profile')), '缺字段应被拒');
+    assert(toasts.some(t => t.includes('结构异常')), 'srs 异常应被拒');
+    toasts = [];
+    let exported = 0;
+    const oldExport = App.exportBackup;
+    App.exportBackup = () => { exported++; };
+    window.confirm = () => true; // 允许覆盖（真实场景用户点确定）
+    App.importBackup(toFile(ok), () => {});
+    await new Promise(r => setTimeout(r, 60));
+    App.toast = oldToast; window.confirm = oldConfirm; App.exportBackup = oldExport;
+    assert(exported >= 1, '确认导入前应自动导出应急备份');
+    assert(toasts.some(t => t.includes('导入成功')), '合法备份应导入成功');
+    assert(App.store.profile.exam === 'cet6', '导入后数据生效');
+    App.store.customWords = App.store.customWords || [];
+  });
+
+  T.add('DS-02 超过7天未备份时首页提醒', () => {
+    App.store.profile.placed = true;
+    App.store.profile.exam = 'cet6';
+    App.store.srs['ability'] = { b: 1, due: Date.now() + App.DAY, c: 1, w: 0 };
+    App.store.lastBackupAt = null;
+    App.go('home');
+    assert(viewText().match(/还没有备份过|未备份/), '无备份记录且有学习数据应提醒');
+    App.store.lastBackupAt = Date.now() - 9 * App.DAY;
+    App.go('home');
+    assert(viewText().includes('9 天未备份'), '9 天未备份应提醒');
+    App.store.lastBackupAt = Date.now();
+    App.go('home');
+    assert(!viewText().match(/未备份/), '刚备份过不应提醒');
+    delete App.store.srs['ability'];
+  });
+
+  T.add('GV-01 批改输出六维度分并渲染雷达图', () => {
+    const fb = App.grader.gradeWriting('With the rapid development of technology, students increasingly rely on smartphones for learning. Admittedly, digital tools bring convenience to education. However, excessive screen time may undermine deep thinking. Moreover, constant notifications distract learners from essential reading. Therefore, we should cultivate balanced study habits. Only by managing technology wisely can we enhance learning efficiency. Furthermore, schools ought to establish clear guidelines for device usage in classrooms. In conclusion, technology is a double-edged sword for education. It is high time we took responsibility for our attention. Nothing is more crucial than self-discipline in this era.');
+    assert(Array.isArray(fb.dims) && fb.dims.length === 6, '应输出6个维度');
+    fb.dims.forEach(d => { assert(d.name && d.score >= 25 && d.score <= 100, '维度分应在25-100：' + d.name); });
+    const svg = App.charts.radar(fb.dims);
+    assert(svg.includes('<svg') && svg.includes('polygon') === false && svg.includes('path'), '雷达图应生成 SVG');
+  });
+
+  T.add('GV-02 写作/翻译成长曲线渲染', () => {
+    App.store.essays.push({ date: App.today(), text: 'x', score: 60 }, { date: App.today(), text: 'y', score: 78 });
+    App.go('writing');
+    assert(viewText().includes('写作能力成长曲线'), '写作页应显示成长曲线');
+    assert($('#wBody svg') != null || $('#view svg') != null, '应渲染 SVG 图表');
+    App.store.translations.push({ date: App.today(), pid: 't1', score: 55 }, { date: App.today(), pid: 't2', score: 71 });
+    App.go('translation');
+    document.querySelectorAll('#view .tab')[1].click();
+    assert(viewText().includes('翻译成绩趋势'), '翻译积累本应显示成绩趋势');
+  });
+
+  T.add('WV-01 英音/美音切换生效', () => {
+    const spoken = [];
+    App.speakHook = (t, lang) => spoken.push(lang);
+    App.store.profile.voice = 'uk';
+    App.speak('hello');
+    assert(spoken[0] === 'en-GB', '英音模式应使用 en-GB');
+    App.store.profile.voice = 'us';
+    App.speak('hello');
+    assert(spoken[1] === 'en-US', '美音模式应使用 en-US');
+    App.speakHook = null;
+  });
+
+  T.add('WV-02 CSV 自定义词库导入', () => {
+    App.store.customWords = [];
+    const csv = '# 注释行应被忽略\nephemeral,/ɪˈfemərəl/,adj.,短暂的；转瞬即逝的\nserenity,平静，宁静\nability,重复词应跳过\nx!,非法词应计数\nwistful,/ˈwɪstfl/,adj.,惆怅的；向往的';
+    const r = App.importCustomCSV(csv);
+    assert(r.added === 3 && r.dup === 1 && r.bad === 1, '导入统计应为 3/1/1，实际 ' + JSON.stringify(r));
+    const m = App.WMAP();
+    assert(m.ephemeral && m.ephemeral.tier === 'custom' && m.ephemeral.gloss.includes('短暂'), '自定义词应进入词典且释义正确');
+    assert(m.wistful && m.wistful.pos === 'adj.', '词性列应被识别');
+    assert(!m['ability'] || m['ability'].tier !== 'custom', '重复词不覆盖原词库');
+    // 我的词库优先进入每日队列
+    App.store.profile.placed = true;
+    App.store.profile.exam = 'cet6';
+    App.dayStat().newW = 0;
+    const news = App.newWords();
+    assert(news.slice(0, 3).every(w => w.tier === 'custom'), '自定义词应优先进入新词队列');
+    // 词库页可筛选我的词库
+    App.go('vocab');
+    document.querySelectorAll('#view .tab')[1].click();
+    const chip = Array.from(document.querySelectorAll('#view [data-tier]')).find(c => c.textContent === '我的词库');
+    assert(chip != null, '应出现我的词库筛选');
+    chip.click();
+    assert(viewText().includes('ephemeral'), '筛选后应显示自定义词');
+    App.store.customWords = [];
+    App._words = null; App._wmap = null;
+  });
+
+  T.add('LI-01 听力错题回看不重做', () => {
+    App.store.profile.placed = true;
+    App.store.profile.exam = 'cet6';
+    App.go('listening', { id: 'c5' });
+    // 第一次作答并提交
+    for (let i = 0; i < 3; i++) H.click('#qCard .opt[data-q="' + i + '"][data-o="0"]');
+    H.click('#qSubmit');
+    assert(viewText().includes('可随时回看'), '提交后应提示可回看');
+    assert(App.store.listeningReview && App.store.listeningReview.c5, '作答明细应已保存');
+    // 离开再回来，出现回看入口
+    App.go('home'); App.go('listening', { id: 'c5' });
+    const see = $('#seeLast');
+    assert(see != null, '应出现回看上次作答按钮');
+    see.click();
+    assert(viewText().includes('回看模式'), '应进入回看模式');
+    assert(viewText().includes('定位句'), '回看解析应含定位句标注');
+    assert($('#redoFresh') != null, '回看模式应提供重做入口');
+    $('#redoFresh').click();
+    assert($('#qSubmit') != null, '重做后恢复作答模式');
+  });
+
+  T.add('LI-02 提交后原文定位句高亮', () => {
+    App.go('listening', { id: 'n1' });
+    for (let i = 0; i < 3; i++) H.click('#qCard .opt[data-q="' + i + '"][data-o="0"]');
+    H.click('#qSubmit');
+    const hi = $$('#sentList .sent-row.loc-hi');
+    assert(hi.length >= 3, '定位句应高亮（n1 三题合计≥3句），实际 ' + hi.length);
+    assert(viewText().includes('定位句：原文第'), '解析应标注定位句');
+  });
+
+  T.add('PWA-01 manifest/SW 资源完整且注册带协议守卫', async () => {
+    const mf = await (await fetch('manifest.webmanifest')).text();
+    const manifest = JSON.parse(mf);
+    assert(manifest.name && manifest.start_url === './' && manifest.icons.length >= 1, 'manifest 结构完整');
+    const icon = await (await fetch('icon.svg')).text();
+    assert(icon.includes('<svg'), '图标存在');
+    const sw = await (await fetch('sw.js')).text();
+    try { new Function(sw); } catch (e) { throw new Error('sw.js 语法错误: ' + e.message); }
+    assert(sw.includes('caches') && sw.includes('addEventListener'), 'sw.js 结构合理');
+    const html = await (await fetch('index.html?v=8')).text();
+    assert(html.includes("location.protocol === 'https:'"), 'SW 注册必须带协议守卫（file:// 不注册）');
+    assert(html.includes('manifest.webmanifest'), 'index 应引用 manifest');
+  });
+
+  T.add('PAGES-01 Pages 工作流文件就绪', async () => {
+    const yml = await (await fetch('.github/workflows/pages.yml')).text();
+    assert(yml.includes('actions/deploy-pages@v4'), '应使用官方 Pages 部署动作');
+    assert(yml.includes('branches: [main]'), '应在 main 推送时触发');
+  });
 })(window.__E2E);

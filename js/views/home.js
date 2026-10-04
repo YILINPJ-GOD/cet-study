@@ -30,6 +30,16 @@ App.Views.home = {
     }).join('');
 
     const pct = Math.round(st.mastered / (st.total || 1) * 100);
+    // 备份提醒：有学习记录但超过 7 天未备份时提醒
+    const hasData = Object.keys(App.store.srs).length > 0 || App.store.essays.length > 0 || App.store.translations.length > 0;
+    const lastBak = App.store.lastBackupAt;
+    const daysSince = lastBak ? Math.floor((Date.now() - lastBak) / App.DAY) : null;
+    let backupRemind = '';
+    if (hasData && (!lastBak || daysSince >= 7)) {
+      backupRemind = '<span class="badge warn">⏰ ' + (lastBak ? daysSince + ' 天未备份' : '还没有备份过') + '，建议先导出</span>';
+    } else if (lastBak) {
+      backupRemind = '<span class="badge ok">✓ ' + daysSince + ' 天前已备份</span>';
+    }
     const lastEssay = App.store.essays[App.store.essays.length - 1];
     const lastTrans = App.store.translations[App.store.translations.length - 1];
     const lastMock = App.store.mocks[App.store.mocks.length - 1];
@@ -100,6 +110,7 @@ App.Views.home = {
       <hr class="hr">
       <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center">
         <b style="font-size:13.5px">数据安全：</b>
+        ${backupRemind}
         <button class="btn ghost sm" data-act="export">导出备份（JSON）</button>
         <button class="btn ghost sm" data-act="import">导入备份</button>
         <button class="btn danger sm" data-act="reset">清空数据</button>
@@ -113,6 +124,11 @@ App.Views.home = {
         <input type="number" class="txt" id="dailyNew" min="3" max="60" style="width:70px" value="${App.store.profile.dailyNew}">
         <span class="note">每日复习上限</span>
         <input type="number" class="txt" id="reviewCap" min="10" max="300" style="width:70px" value="${App.store.profile.reviewCap}">
+        <span class="note">发音口音</span>
+        <select class="selct" id="voiceSel">
+          <option value="us" ${App.store.profile.voice !== 'uk' ? 'selected' : ''}>美音</option>
+          <option value="uk" ${App.store.profile.voice === 'uk' ? 'selected' : ''}>英音</option>
+        </select>
         <button class="btn plain sm" id="saveProfile">保存</button>
         ${App.store.profile.placed ? '<button class="btn plain sm" data-go="placement">重新测水平</button>' : ''}
       </div>
@@ -130,6 +146,7 @@ App.Views.home = {
       const rc = parseInt(el.querySelector('#reviewCap').value) || 60;
       App.store.profile.dailyNew = Math.max(3, Math.min(60, dn));
       App.store.profile.reviewCap = Math.max(10, Math.min(300, rc));
+      App.store.profile.voice = el.querySelector('#voiceSel').value === 'uk' ? 'uk' : 'us';
       App.save();
       App.toast('已保存');
       App.go('home');

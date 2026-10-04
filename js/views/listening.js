@@ -313,7 +313,7 @@ App.Listening = {};
       S.set.sentences.map((sn, i) => {
         const t = S.calib[i] != null ? App.mmss(S.calib[i]) : '--:--';
         const isCur = S.sentLoop && i === S.sentIdx;
-        return `<div class="sent-row ${isCur ? 'cur' : ''}" style="padding:8px 10px;border-bottom:1px dashed var(--line);border-radius:8px;${isCur ? 'background:var(--pri-soft)' : ''}">
+        return `<div class="sent-row ${isCur ? 'cur' : ''}" data-si="${i}" style="padding:8px 10px;border-bottom:1px dashed var(--line);border-radius:8px;${isCur ? 'background:var(--pri-soft)' : ''}">
           <div style="display:flex;gap:8px;align-items:flex-start">
             <span class="note mono" style="min-width:44px">${t}</span>
             <div style="flex:1;min-width:0">
@@ -340,42 +340,79 @@ App.Listening = {};
     box.querySelectorAll('[data-loop]').forEach(b => b.onclick = () => { jumpToSentence(+b.dataset.loop); });
   }
 
-  function renderQuestions() {
+  function renderQuestions(reviewSaved) {
     const set = S.set;
     const card = document.getElementById('qCard');
-    const answers = new Array(set.questions.length).fill(null);
-    card.innerHTML = `<h3>听力题目 <span class="sub">先盲听作答，再对照解析</span></h3>
+    const locmap = (window.LISTENING_LOC || {})[set.id] || [];
+    set.questions.forEach((q, i) => { q.loc = locmap[i] || null; });
+    const rev = (App.store.listeningReview || {})[set.id];
+    const answers = reviewSaved && rev ? rev.answers.slice() : new Array(set.questions.length).fill(null);
+    const locked = !!reviewSaved;
+    card.innerHTML = `<h3>听力题目 <span class="sub">${locked ? '🔒 回看模式（' + rev.date + ' · 得 ' + rev.c + '/' + rev.t + '）' : '先盲听作答，再对照解析'}</span></h3>
+      ${rev && !locked ? '<button class="btn plain sm" id="seeLast" style="margin-bottom:10px">📋 回看上次作答（' + rev.date + ' · 得 ' + rev.c + '/' + rev.t + '）</button>' : ''}
       ${set.questions.map((q, i) => `<div style="margin-bottom:16px">
         <b>${i + 1}. ${App.esc(q.q)}</b>
-        ${q.opts.map((o, j) => `<div class="opt" data-q="${i}" data-o="${j}"><span class="k">${'ABCD'[j]}</span><span>${App.esc(o)}</span></div>`).join('')}
+        ${q.opts.map((o, j) => `<div class="opt ${locked && answers[i] === j ? (j === q.a ? 'right' : 'wrong') : (!locked && answers[i] === j ? 'sel' : '')}" data-q="${i}" data-o="${j}"><span class="k">${'ABCD'[j]}</span><span>${App.esc(o)}</span></div>`).join('')}
         <div class="fb-item" id="lexp${i}" style="display:none"></div>
       </div>`).join('')}
-      <button class="btn" id="qSubmit">提交答案</button>`;
+      ${locked ? `<div class="note">🔒 回看模式：你的选择与正确答案已标注。<button class="btn ghost sm" id="redoFresh">重新做一遍</button> <button class="btn ghost sm" id="locHi">高亮定位句</button></div>`
+        : `<button class="btn" id="qSubmit">提交答案</button>`}`;
+    // 标注正确/错误并显示解析（提交后或回看模式共用）
+    const reveal = (ans) => {
+      let c = 0;
+      const locAll = new Set();
+      set.questions.forEach((q, i) => {
+        const ok = ans[i] === q.a;
+        if (ok) c++;
+        card.querySelectorAll('.opt[data-q="' + i + '"]').forEach(o2 => {
+          o2.style.pointerEvents = 'none';
+          const j = +o2.dataset.o;
+          if (j === q.a) o2.classList.add('right');
+          else if (ans[i] === j) o2.classList.add('wrong');
+        });
+        const exp = card.querySelector('#lexp' + i);
+        exp.style.display = 'flex';
+        exp.className = 'fb-item ' + (ok ? 'good' : 'bad');
+        const locTxt = q.loc && q.loc.length ? ' · 定位句：原文第 ' + q.loc.map(x => x + 1).join('、') + ' 句' : '';
+        exp.innerHTML = '<b>' + (ok ? '✓ 正确' : '✗ 你的答案：' + (ans[i] == null ? '未作答 · ' : String.fromCharCode(65 + ans[i]) + ' · ')) + '正确：' + String.fromCharCode(65 + q.a) + '</b><span>' + App.esc(q.exp) + '<span class="note">' + locTxt + '</span></span>';
+        (q.loc || []).forEach(x => locAll.add(x));
+      });
+      // 原文定位句高亮
+      document.querySelectorAll('#sentList .sent-row').forEach(r => {
+        if (locAll.has(+r.dataset.si)) r.classList.add('loc-hi');
+      });
+      return c;
+    };
+    if (locked) {
+      reveal(answers);
+      card.querySelector('#redoFresh').onclick = () => renderQuestions(false);
+      const hi = card.querySelector('#locHi');
+      if (hi) hi.onclick = () => {
+        document.querySelectorAll('#sentList .sent-row.loc-hi').forEach(r => r.classList.remove('loc-hi'));
+        reveal(answers);
+        card.scrollIntoView({ behavior: 'smooth' });
+      };
+      // 回看模式的选项不可再点
+      card.querySelectorAll('.opt').forEach(o => o.style.pointerEvents = 'none');
+      return;
+    }
     card.querySelectorAll('.opt').forEach(o => o.onclick = () => {
       const qi = +o.dataset.q;
       card.querySelectorAll('.opt[data-q="' + qi + '"]').forEach(x => x.classList.remove('sel'));
       o.classList.add('sel');
       answers[qi] = +o.dataset.o;
     });
+    const seeLast = card.querySelector('#seeLast');
+    if (seeLast) seeLast.onclick = () => renderQuestions(true);
     card.querySelector('#qSubmit').onclick = () => {
       if (answers.includes(null) && !App.confirmBox('还有题目未作答，确定提交吗？')) return;
-      let c = 0;
-      set.questions.forEach((q, i) => {
-        const ok = answers[i] === q.a;
-        if (ok) c++;
-        card.querySelectorAll('.opt[data-q="' + i + '"]').forEach(o2 => {
-          o2.style.pointerEvents = 'none';
-          const j = +o2.dataset.o;
-          if (j === q.a) o2.classList.add('right');
-          else if (answers[i] === j) o2.classList.add('wrong');
-        });
-        const exp = card.querySelector('#lexp' + i);
-        exp.style.display = 'flex';
-        exp.className = 'fb-item ' + (ok ? 'good' : 'bad');
-        exp.innerHTML = '<b>' + (ok ? '✓ 正确' : '✗ 你的答案：' + (answers[i] == null ? '未作答 · ' : String.fromCharCode(65 + answers[i]) + ' · ')) + '正确：' + String.fromCharCode(65 + q.a) + '</b><span>' + App.esc(q.exp) + '</span>';
-      });
+      const c = reveal(answers);
       record(set.type, set.id, c, set.questions.length);
-      const btn = card.querySelector('#qSubmit'); btn.disabled = true; btn.textContent = '已提交 ' + c + '/' + set.questions.length;
+      // 保存作答明细供回看
+      App.store.listeningReview = App.store.listeningReview || {};
+      App.store.listeningReview[set.id] = { answers: answers.slice(), date: App.today(), c, t: set.questions.length };
+      App.save();
+      const btn = card.querySelector('#qSubmit'); btn.disabled = true; btn.textContent = '已提交 ' + c + '/' + set.questions.length + '（可随时回看）';
       App.toast('听力练习已记录：' + Math.round(c / set.questions.length * 100) + '%');
     };
   }

@@ -142,6 +142,9 @@ select.selct{border:1.5px solid var(--line);border-radius:9px;padding:6px 10px;b
 .sent-row.cur .sent-en{font-weight:600}
 /* 听力句高亮 */
 .sent-row.cur{box-shadow:inset 3px 0 0 var(--pri)}
+/* 听力定位句高亮 */
+.sent-row.loc-hi{background:#fff8e1;box-shadow:inset 3px 0 0 #d97706}
+.sent-row.loc-hi .sent-en{font-weight:600}
 /* 其他 */
 .empty{text-align:center;color:var(--ink3);padding:36px 10px;font-size:14px}
 .empty .big{font-size:40px;margin-bottom:8px}

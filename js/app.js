@@ -31,6 +31,8 @@
     window.scrollTo(0, 0);
     document.getElementById('viewTitle').textContent = TITLES[name] || name;
     document.querySelectorAll('#nav .nav-item').forEach(n => n.classList.toggle('active', n.dataset.v === name));
+    // 视图内部瞬态状态（tab/会话）在路由切换时重置
+    if (App.Views[name].reset) { try { App.Views[name].reset(); } catch (e) {} }
     try { App.Views[name].render(el, param); }
     catch (e) {
       console.error(e);

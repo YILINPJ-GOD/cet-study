@@ -1,0 +1,14 @@
+{
+  "name": "四六级智学 · 备考智能体",
+  "short_name": "四六级智学",
+  "description": "纯离线的大学英语四六级备考应用：测学练考评闭环",
+  "lang": "zh-CN",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#f3f5fb",
+  "theme_color": "#4f46e5",
+  "icons": [
+    { "src": "icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" }
+  ]
+}

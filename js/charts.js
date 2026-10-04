@@ -42,6 +42,36 @@ App.charts.line = function (opts) {
   return svg + legend;
 };
 
+/* 雷达图 dims: [{name, score(0-100)}] */
+App.charts.radar = function (dims) {
+  const n = dims.length;
+  if (n < 3) return '';
+  const W = 240, H = 200, cx = W / 2, cy = H / 2 + 4, R = 72;
+  const ang = i => -Math.PI / 2 + i * 2 * Math.PI / n;
+  const pt = (i, r) => [cx + Math.cos(ang(i)) * r, cy + Math.sin(ang(i)) * r];
+  let svg = '<svg viewBox="0 0 ' + W + ' ' + H + '" style="width:100%;max-width:280px;height:auto;display:block;margin:0 auto">';
+  for (const g of [0.25, 0.5, 0.75, 1]) {
+    let d = '';
+    for (let i = 0; i < n; i++) { const [x, y] = pt(i, R * g); d += (i ? 'L' : 'M') + x.toFixed(1) + ' ' + y.toFixed(1) + ' '; }
+    svg += '<path d="' + d + 'Z" fill="none" stroke="#e6e9f2" stroke-width="1"/>';
+  }
+  for (let i = 0; i < n; i++) { const [x, y] = pt(i, R); svg += '<line x1="' + cx + '" y1="' + cy + '" x2="' + x.toFixed(1) + '" y2="' + y.toFixed(1) + '" stroke="#e6e9f2"/>'; }
+  let d = '';
+  for (let i = 0; i < n; i++) { const [x, y] = pt(i, R * Math.max(0.05, dims[i].score / 100)); d += (i ? 'L' : 'M') + x.toFixed(1) + ' ' + y.toFixed(1) + ' '; }
+  const col = dims.every(x => x.score >= 80) ? '#16a34a' : dims.some(x => x.score < 55) ? '#d97706' : '#6366f1';
+  svg += '<path d="' + d + 'Z" fill="' + col + '22" stroke="' + col + '" stroke-width="2"/>';
+  for (let i = 0; i < n; i++) {
+    const [x, y] = pt(i, R * Math.max(0.05, dims[i].score / 100));
+    svg += '<circle cx="' + x.toFixed(1) + '" cy="' + y.toFixed(1) + '" r="3" fill="' + col + '"><title>' + dims[i].name + '：' + dims[i].score + '</title></circle>';
+  }
+  for (let i = 0; i < n; i++) {
+    const [x, y] = pt(i, R + 16);
+    svg += '<text x="' + x.toFixed(1) + '" y="' + (y + 3).toFixed(1) + '" text-anchor="middle" font-size="10" fill="#5a6480">' + dims[i].name + ' ' + dims[i].score + '</text>';
+  }
+  svg += '</svg>';
+  return svg;
+};
+
 /* 柱状图 data: [{label,value,color}] */
 App.charts.bars = function (opts) {
   const W = 620, H = 210, PL = 40, PR = 10, PT = 14, PB = 26;

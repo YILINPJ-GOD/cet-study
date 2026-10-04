@@ -5,6 +5,7 @@ App.Views.writing = App.Views.writing || {};
   let curTopic = null, curFeedback = null;
 
   const V = App.Views.writing;
+  V.reset = function () { tab = 'grade'; };
   V.render = function (el, param) {
     if (param && param.topicId) { tab = 'grade'; curTopic = (window.WRITING_TOPICS || []).find(t => t.id === param.topicId) || curTopic; }
     el.innerHTML = '<div class="tabs">' +
@@ -50,6 +51,8 @@ App.Views.writing = App.Views.writing || {};
       </div>
       <div class="card">
         <h3>我的批改历史 <span class="sub">${essays.length} 篇</span></h3>
+        ${essays.length >= 2 ? `<h3 style="font-size:13.5px;margin-top:4px">📈 写作能力成长曲线 <span class="sub">每次批改的综合分</span></h3>
+        ${App.charts.line({ series: [{ name: '批改得分', color: '#4f46e5', data: App.store.essays.map((e2, i) => ({ x: (e2.date || '') + ' #' + (App.store.essays.length - i), y: e2.score })) }], max: 100, min: 0, yUnit: '' })}` : ''}
         ${essays.length ? essays.slice(0, 8).map(e2 => `<div class="list-row"><span class="badge ${e2.score >= 80 ? 'ok' : e2.score >= 70 ? 'warn' : 'bad'}">${e2.score}分</span><div style="flex:1;min-width:0"><div style="font-size:13.5px" class="essay-pane">${App.esc(e2.text.slice(0, 80))}…</div><div class="note">${e2.date} · ${e2.cat || ''}</div></div><button class="btn plain sm" data-view="${e2.date}">查看</button></div>`).join('') : '<div class="empty">还没有批改记录</div>'}
       </div>`;
     // 事件
@@ -100,8 +103,11 @@ App.Views.writing = App.Views.writing || {};
         <div><b style="font-size:16px">AI 批改报告${cached ? '（历史作文）' : ''}</b><div class="note" style="max-width:420px;margin-top:4px">${fb.summary}</div></div>
       </div>
       <hr class="hr">
-      ${fb.items.map(it => `<div class="fb-item ${it.type}"><b>${icons[it.type][0]} ${App.esc(it.title)}</b><span>${App.esc(it.detail)}</span></div>`).join('')}
-      <div class="note" style="margin-top:8px">批改维度：篇幅 · 结构 · 衔接 · 句式多样性 · 高级词汇 · 拼写规范。每次修改后重新提交，观察分数变化。</div>`;
+      <div class="grid2" style="grid-template-columns:300px 1fr;align-items:center">
+        <div><b style="font-size:13.5px;display:block;text-align:center;margin-bottom:4px">维度画像</b>${App.charts.radar(fb.dims || [])}</div>
+        <div>${fb.items.map(it => `<div class="fb-item ${it.type}"><b>${icons[it.type][0]} ${App.esc(it.title)}</b><span>${App.esc(it.detail)}</span></div>`).join('')}</div>
+      </div>
+      <div class="note" style="margin-top:8px">批改维度：篇幅 · 结构 · 衔接 · 句式 · 用词 · 拼写规范。雷达图越接近外圈越强；优先补最凹的那一项。每次修改后重新提交，观察分数变化。</div>`;
   }
 
   /* ---------- 范文 ---------- */

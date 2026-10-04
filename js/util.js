@@ -1,6 +1,6 @@
 /* ===== 工具层：全局对象、通用函数、词库装配 ===== */
 const App = window.App = {};
-App.VERSION = '1.1.0';
+App.VERSION = '1.2.0';
 
 /* ---------- 日期与格式 ---------- */
 App.today = function (d) {
@@ -49,13 +49,23 @@ App.toast = function (msg, ms) {
 };
 App.speak = function (text) {
   try {
-    if (App.speakHook) return App.speakHook(text);   // 测试/扩展钩子
+    if (App.speakHook) return App.speakHook(text, App.speakLang());   // 测试/扩展钩子
     if (!window.speechSynthesis) { App.toast('当前浏览器不支持发音'); return; }
     speechSynthesis.cancel();
     const u = new SpeechSynthesisUtterance(text);
-    u.lang = 'en-US'; u.rate = 0.92;
+    u.lang = App.speakLang();
+    // 按所选口音优先挑选匹配的语音包
+    const want = u.lang;
+    const voices = speechSynthesis.getVoices ? speechSynthesis.getVoices() : [];
+    const v = voices.find(x => x.lang === want) || voices.find(x => x.lang && x.lang.replace('_', '-').startsWith(want.slice(0, 2)));
+    if (v) u.voice = v;
+    u.rate = 0.92;
     speechSynthesis.speak(u);
   } catch (e) { /* 忽略 */ }
+};
+/* 发音口音：美音(默认)/英音，可在首页设置 */
+App.speakLang = function () {
+  return (App.store && App.store.profile && App.store.profile.voice === 'uk') ? 'en-GB' : 'en-US';
 };
 App.confirmBox = function (msg) { return window.confirm(msg); };
 
@@ -67,6 +77,7 @@ App.LV = {
 };
 /* 档位注册表：exam 决定词库组成；goal 为目标词量（可分批补齐） */
 App.TIERS = {
+  custom: { label: '我的词库', short: '我的', exam: 'both', lv: 2, order: 0, goal: null },
   t4c: { label: '四级常用', short: '常用', exam: 'cet4', lv: 1, order: 1, goal: 5000 },
   t4h: { label: '四级高频', short: '高频', exam: 'cet4', lv: 2, order: 2, goal: 2500 },
   t4s: { label: '四级冲刺', short: '冲刺', exam: 'cet4', lv: 3, order: 3, goal: 800 },
@@ -103,6 +114,12 @@ App.allWords = function (exam) {
   exam = exam || (App.store && App.store.profile && App.store.profile.exam) || 'cet6';
   if (App._words && App._wordsExam === exam) return App._words;
   const seen = {}, out = [];
+  // 自定义词（导入的生词表）优先
+  for (const cw of (App.store && App.store.customWords) || []) {
+    if (!cw || !cw.w || seen[cw.w]) continue;
+    seen[cw.w] = 1;
+    out.push({ w: cw.w, ipa: cw.ipa || '', pos: cw.pos || '', gloss: cw.gloss || '', tier: 'custom', lv: 2 });
+  }
   for (const tier of App.banksOf(exam)) {
     const meta = App.TIERS[tier];
     for (const vn of App.BANKS[tier].vars) {
