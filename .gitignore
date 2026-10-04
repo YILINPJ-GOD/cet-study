@@ -1,0 +1,13 @@
+# 生成/临时产物
+tools/gaps.txt
+tools/gaps2.txt
+tools/careful.txt
+tools/cloze.txt
+tools/missing_words.json
+*.log
+log-check.txt
+
+# 系统文件
+Thumbs.db
+desktop.ini
+.DS_Store
