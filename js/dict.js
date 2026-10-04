@@ -114,6 +114,10 @@ App.dict.init = function () {
         + '<span>' + App.esc(entry.pos) + '</span>'
         + lvBadge
         + '</div><div class="dg">' + App.esc(entry.gloss) + '</div>'
+        + (App.morph && entry.w.length >= 5 ? (function () {
+            const mo = App.morph(entry.w);
+            return mo ? '<div class="note" style="margin-bottom:8px">🧩 词根拆解：' + App.esc(mo.text) + '</div>' : '';
+          })() : '')
         + '<button class="ico-btn ' + (inBook ? 'starred' : '') + '" data-act="book">' + (inBook ? '✓ 已在生词本' : '＋ 加入生词本') + '</button>'
         + (window.EXAMPLES && window.EXAMPLES[entry.w] ? '<div class="note" style="margin-top:9px;font-style:italic">' + App.esc(window.EXAMPLES[entry.w][0]) + '<br>' + App.esc(window.EXAMPLES[entry.w][1]) + '</div>' : '');
     } else {

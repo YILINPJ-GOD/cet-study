@@ -1,6 +1,6 @@
 /* ===== 工具层：全局对象、通用函数、词库装配 ===== */
 const App = window.App = {};
-App.VERSION = '1.2.0';
+App.VERSION = '1.3.0';
 
 /* ---------- 日期与格式 ---------- */
 App.today = function (d) {
@@ -182,6 +182,33 @@ App.streak = function () {
   if (!(App.store.days[App.today(d)] && App.store.days[App.today(d)].sec >= App.CHECKIN_SEC)) d.setDate(d.getDate() - 1);
   while (App.store.days[App.today(d)] && App.store.days[App.today(d)].sec >= App.CHECKIN_SEC) { n++; d.setDate(d.getDate() - 1); }
   return n;
+};
+
+/* ---------- 单词拆解（词根词缀）：App.morph(word) → {prefix, root, suffix, text} 或 null ---------- */
+App.morph = function (word) {
+  const w = String(word || '').toLowerCase();
+  if (!w || w.length < 4) return null;
+  const P = window.WORD_PREFIXES || {}, S = window.WORD_SUFFIXES || {}, R = window.WORD_ROOTS || [];
+  let prefix = null, suffix = null, root = null;
+  for (const p of Object.keys(P).sort((a, b) => b.length - a.length)) {
+    if (w.startsWith(p) && w.length - p.length >= 3) { prefix = { p, m: P[p] }; break; }
+  }
+  for (const s of Object.keys(S).sort((a, b) => b.length - a.length)) {
+    if (w.endsWith(s) && w.length - s.length >= 3) { suffix = { s, m: S[s] }; break; }
+  }
+  const mid = w.slice(prefix ? prefix.p.length : 0, suffix ? w.length - suffix.s.length : w.length);
+  for (const r of R) {
+    const key = r.r.split('/')[0];
+    const alt = r.r.split('/')[1] || '';
+    if ((key && mid.includes(key)) || (alt && mid.includes(alt))) { root = { r: r.r, m: r.m }; break; }
+  }
+  const parts = [];
+  if (prefix) parts.push(prefix.p + '（' + prefix.m + '）');
+  if (root) parts.push((root.r.split('/')[0]) + '（' + root.m + '）');
+  if (!root && mid && mid.length >= 3) parts.push(mid);
+  if (suffix) parts.push(suffix.s + '（' + suffix.m + '）');
+  if (parts.length < 2) return null;
+  return { prefix, root, suffix, text: parts.join(' + ') };
 };
 
 /* ---------- 简易 DOM 助手 ---------- */

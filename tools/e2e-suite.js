@@ -534,4 +534,118 @@ window.__E2E = {
     assert(yml.includes('actions/deploy-pages@v4'), '应使用官方 Pages 部署动作');
     assert(yml.includes('branches: [main]'), '应在 main 推送时触发');
   });
+
+  /* ---------- v1.3.0：测试题型扩展 / 返回选级 / 智能出题 / 词根词缀 ---------- */
+  T.add('PL-01 入学测试含单词/短语/句子语境三类题型', async () => {
+    await H.startPlacement('cet6');
+    const kinds = App.Views.placement.kinds();
+    assert(kinds.length === 20, '应恰好20题，实际 ' + kinds.length);
+    assert(kinds.includes('phrase'), '应包含短语题');
+    assert(kinds.includes('sent'), '应包含句子语境题');
+    assert(kinds.filter(k => k === 'word').length >= 10, '单词题应占主体');
+    assert((window.PLACEMENT_PHRASES || []).length >= 40, '短语库应≥40条');
+  });
+
+  T.add('PL-02 语境题渲染句子且回顾带题型标记', async () => {
+    const kinds = App.Views.placement.kinds();
+    const sentIdx = kinds.indexOf('sent');
+    assert(sentIdx >= 0, '应有语境题');
+    // 跳到第一道语境题（直接重渲染视图，不走路由以免重置测试状态）
+    const st = App.Views.placement.state();
+    st.idx = sentIdx;
+    App.Views.placement.render(document.querySelector('#view'));
+    assert($('#view .passage') != null, '语境题应渲染句子');
+    assert($('#view b') != null, '句子中目标词应加粗');
+    // 作答全部题并交卷检查题型标记
+    await H.answerPlacement();
+    assert(viewText().includes('短语'), '回顾应含短语标记');
+    assert(viewText().includes('语境'), '回顾应含语境标记');
+    App.Views.placement.reset();
+  });
+
+  T.add('SW-01 已选级别可返回重选（四级/六级）', () => {
+    App.store.profile.placed = true;
+    App.store.profile.exam = 'cet6';
+    App.go('placement');
+    assert($('#switchExam') != null, '入学测试页应有返回选级按钮');
+    H.click('#switchExam');
+    H.expectView('welcome');
+    assert(viewText().includes('大学英语四级') && viewText().includes('大学英语六级'), '应展示两个级别选项');
+    // 选四级 → 进四级测试
+    H.click('[data-exam="cet4"]');
+    H.expectView('placement');
+    assert(viewText().includes('四级· 入学水平测试'), '应进入四级测试');
+    assert(App.store.profile.exam === 'cet4', '级别应切换为 cet4');
+    App.store.profile.placed = true; App.store.profile.exam = 'cet6';
+  });
+
+  T.add('GN-01 仔细阅读生成：结构完整且两次生成不同', () => {
+    const s1 = App.Gen.makeCareful('tech');
+    assert(s1 && s1.text.length >= 800, '生成文章应足够长（≈300词），实际 ' + s1.text.length + '字符');
+    assert(s1.text.split(/\n\s*\n/).length >= 3, '应分≥3段');
+    assert(s1.questions.length === 5, '应5道题');
+    s1.questions.forEach((q, i) => {
+      assert(q.opts.length === 4 && q.a >= 0 && q.a <= 3 && q.exp, '第' + (i + 1) + '题结构错误');
+    });
+    const mainQ = s1.questions[4];
+    assert(/main idea/i.test(mainQ.q), '第5题应为主旨题');
+    const s2 = App.Gen.makeCareful('env');
+    assert(s2.text !== s1.text || s2.id !== s1.id, '两次生成应有差异');
+  });
+
+  T.add('GN-02 选词填空生成：15选项/10空/答案唯一', () => {
+    const s = App.Gen.makeCloze('health');
+    assert(s.options.length === 15, '应15个选项，实际 ' + s.options.length);
+    assert(new Set(s.options).size === 15, '选项不应重复');
+    assert(s.a.length === 10 && new Set(s.a).size === 10, '10个答案且下标唯一');
+    assert(s.a.every(x => x >= 0 && x < 15), '答案下标越界');
+    assert(s.exp.length === 10, '应10条解析');
+    const holes = (s.text.match(/\{(\d+)\}/g) || []).length;
+    assert(holes === 10, '文中应有10个占位符，实际 ' + holes);
+  });
+
+  T.add('GN-03 生成题可直接练习并计入记录', () => {
+    App.store.profile.placed = true;
+    App.store.profile.exam = 'cet6';
+    App.go('reading');
+    assert(viewText().includes('智能出题'), '阅读首页应有生成器入口');
+    H.click('#genBtn');
+    const before = App.store.practice.reading.length;
+    assert($('#submit') != null, '生成题应直接进入练习页');
+    // 作答并交卷
+    for (let i = 0; i < 5; i++) {
+      const o = $('#view .opt[data-q="' + i + '"][data-o="0"]');
+      if (o) o.click();
+    }
+    H.click('#submit');
+    assert(App.store.practice.reading.length >= before, '生成题练习应计入记录');
+  });
+
+  T.add('RT-01 词根库与拆解引擎', () => {
+    const roots = window.WORD_ROOTS || [];
+    assert(roots.length >= 20, '词根应≥20个，实际 ' + roots.length);
+    roots.forEach(r => assert(r.r && r.m && r.ex.length >= 2, '词根 ' + r.r + ' 数据不完整'));
+    const mo1 = App.morph('unfair');
+    assert(mo1 && mo1.prefix && mo1.prefix.p === 'un', 'unfair 应拆出前缀 un');
+    const mo2 = App.morph('education');
+    assert(mo2 && mo2.suffix && mo2.suffix.s === 'tion', 'education 应拆出后缀 tion');
+    assert(mo2.root && mo2.root.r.includes('duc'), 'education 应识别词根 duc');
+    assert(App.morph('the') === null, '短词/功能词不拆解');
+  });
+
+  T.add('RT-02 词汇页新增词根词缀标签与推断练习', () => {
+    App.store.profile.placed = true;
+    App.store.profile.exam = 'cet6';
+    App.go('vocab');
+    const tabs = Array.from(document.querySelectorAll('#view .tab')).map(t => t.textContent);
+    assert(tabs.some(t => t.includes('词根词缀')), '应出现词根词缀标签');
+    const rootTab = Array.from(document.querySelectorAll('#view .tab')).find(t => t.textContent.includes('词根词缀'));
+    rootTab.click();
+    assert($$('#view [data-r]').length >= 20, '应展示词根卡片');
+    H.click('#rootQuizBtn');
+    assert(viewText().includes('推断这个词的含义'), '应进入拆解推断练习');
+    assert($('#rqOpts .opt') != null, '推断题应有选项');
+    $('#backRoots').click();
+    assert($$('#view [data-r]').length >= 20, '可返回词根表');
+  });
 })(window.__E2E);

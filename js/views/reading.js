@@ -52,8 +52,9 @@ App.Reading = {}; // 模考复用的题型渲染器
 
   const V = App.Views.reading;
   V.render = function (el, param) {
-    if (param && param.type && param.id) return App.Reading['render_' + param.type](el, param.id, {}, () => V.render(el, { type: param.type }));
+    if (param && param.type && param.id) return App.Reading['render_' + param.type](el, param.id, param.opts || {}, () => V.render(el, { type: param.type }));
     if (param && param.type) return renderType(el, param.type);
+    if (param && param.gen) return renderGen(el);
     el.innerHTML = '<div class="grid3">' + Object.keys(TYPES).map(k => {
       const t = TYPES[k];
       const sets = DATA[k]();
@@ -67,9 +68,32 @@ App.Reading = {}; // 模考复用的题型渲染器
         <div style="display:flex;justify-content:space-between;font-size:13px"><span>${sets.length} 篇题源</span><b>${acc == null ? '未开练' : '平均正确率 ' + acc + '%'}</b></div>
       </div>`;
     }).join('') + '</div>' +
+    `<div class="card">
+      <h3>🎯 智能出题 <span class="sub">选主题，即时生成全新文章与题目</span></h3>
+      <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center">
+        <select class="selct" id="genType">
+          <option value="careful">仔细阅读（5 题）</option>
+          <option value="cloze">选词填空（15 选 10）</option>
+        </select>
+        <select class="selct" id="genTheme">
+          ${App.Gen.themes().map(t => '<option value="' + t.key + '">' + t.label + '</option>').join('')}
+        </select>
+        <button class="btn" id="genBtn">✨ 生成新题</button>
+      </div>
+      <div class="note" style="margin-top:8px">生成器按主题模板即时组装全新文章与题目（细节/词义/主旨全覆盖，选词填空自动配 15 选项与逐空解析），每次生成的文章都不同；练习成绩照常计入趋势。</div>
+    </div>` +
     `<div class="card"><h3>💡 练法建议</h3><div class="note">每个题型单独训练手感和节奏：仔细阅读限时 <b>9 分钟/篇</b>，长篇阅读 <b>7 分钟/篇</b>，选词填空 <b>6 分钟/篇</b>（正式考试阅读部分共 40 分钟）。做题时<b>点击文章中的任何单词</b>即可查释义并加入生词本。</div></div>`;
     el.querySelectorAll('[data-type]').forEach(c => c.onclick = () => V.render(el, { type: c.dataset.type }));
-  };
+    el.querySelector('#genBtn').onclick = () => {
+      const type = el.querySelector('#genType').value;
+      const theme = el.querySelector('#genTheme').value;
+      const set = type === 'cloze' ? App.Gen.makeCloze(theme) : App.Gen.makeCareful(theme);
+      if (!set) { App.toast('生成失败，请重试'); return; }
+      App.Reading['render_' + type](el, set.id, { set }, () => V.render(el));
+    };
+  }
+
+  function renderGen(el) { /* 预留 */ }
 
   function renderType(el, type) {
     const t = TYPES[type];
@@ -103,7 +127,7 @@ App.Reading = {}; // 模考复用的题型渲染器
 
   /* ---------- 仔细阅读 ---------- */
   App.Reading.render_careful = function (el, id, opts, onBack) {
-    const set = (window.READING_CAREFUL || []).find(s => s.id === id);
+    const set = opts.set || (window.READING_CAREFUL || []).find(s => s.id === id);
     if (!set) { el.innerHTML = '<div class="card">题库未加载</div>'; return; }
     const answers = new Array(set.questions.length).fill(null);
     const lookups = [];
@@ -231,7 +255,7 @@ App.Reading = {}; // 模考复用的题型渲染器
 
   /* ---------- 选词填空 ---------- */
   App.Reading.render_cloze = function (el, id, opts, onBack) {
-    const set = (window.READING_CLOZE || []).find(s => s.id === id);
+    const set = opts.set || (window.READING_CLOZE || []).find(s => s.id === id);
     if (!set) { el.innerHTML = '<div class="card">题库未加载</div>'; return; }
     const N = 10;
     const picks = new Array(N).fill(null);

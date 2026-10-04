@@ -6,15 +6,16 @@ App.Views.vocab = App.Views.vocab || {};
   let flash = null;     // {stack:[entry], idx, flipped}
 
   const V = App.Views.vocab;
-  V.reset = function () { tab = 'task'; session = null; flash = null; };
+  V.reset = function () { tab = 'task'; session = null; flash = null; rootQuiz = null; };
   V.render = function (el) {
     el.innerHTML = '<div class="tabs">' +
-      [['task', '🎯 今日任务'], ['bank', '📖 词库'], ['flash', '⚡ 速刷'], ['stat', '📊 统计']]
+      [['task', '🎯 今日任务'], ['bank', '📖 词库'], ['roots', '🧩 词根词缀'], ['flash', '⚡ 速刷'], ['stat', '📊 统计']]
         .map(([k, t]) => '<button class="tab ' + (tab === k ? 'active' : '') + '" data-t="' + k + '">' + t + '</button>').join('') + '</div><div id="vBody"></div>';
-    el.querySelectorAll('.tab').forEach(b => b.onclick = () => { tab = b.dataset.t; session = null; V.render(el); });
+    el.querySelectorAll('.tab').forEach(b => b.onclick = () => { tab = b.dataset.t; session = null; rootQuiz = null; V.render(el); });
     const body = el.querySelector('#vBody');
     if (tab === 'task') renderTask(body);
     else if (tab === 'bank') renderBank(body);
+    else if (tab === 'roots') renderRoots(body);
     else if (tab === 'flash') renderFlash(body);
     else renderStat(body);
   };
@@ -286,6 +287,81 @@ App.Views.vocab = App.Views.vocab || {};
       rd.readAsText(f);
     };
     paint();
+  }
+
+  /* ---------- 词根词缀：浏览 + 拆解推断练习 ---------- */
+  let rootQuiz = null;
+  function renderRoots(el) {
+    const roots = window.WORD_ROOTS || [];
+    if (rootQuiz) return renderRootQuiz(el);
+    el.innerHTML = `<div class="card">
+      <h3>🧩 词根词缀 · 单词拆解 <button class="btn ghost sm" id="rootQuizBtn" style="margin-left:auto">🎮 拆解推断练习</button></h3>
+      <div class="note" style="margin-bottom:10px">一个词根 = 一串单词。先记住词根含义，见到生词拆一拆：前缀（改意思）+ 词根（核心义）+ 后缀（改词性）。</div>
+      <div class="grid3">${roots.map((r, i) => `<div class="topic-card" data-r="${i}">
+        <div class="tc-title"><span style="font-family:Georgia,serif;color:var(--pri)">${r.r}</span> <span class="tag">${r.m}</span></div>
+        <div class="tc-meta">${r.ex.slice(0, 3).map(x => x[0]).join(' · ')}…</div>
+      </div>`).join('')}</div>
+      <div id="rootDetail" style="margin-top:14px"></div>
+    </div>`;
+    const detail = el.querySelector('#rootDetail');
+    el.querySelectorAll('[data-r]').forEach(c => c.onclick = () => {
+      const r = roots[+c.dataset.r];
+      detail.innerHTML = `<div class="card" style="margin:0">
+        <h3><span style="font-family:Georgia,serif;color:var(--pri)">${r.r}</span> = ${r.m} <span class="sub">${r.ex.length} 个派生词</span></h3>
+        ${r.ex.map(x => `<div class="fb-item info"><b>${x[0]}</b><span>${App.esc(x[2] || '')}<br><span class="note">${App.esc(x[1] || (App.WMAP()[x[0]] || {}).gloss || '')}</span></span></div>`).join('')}
+      </div>`;
+      detail.scrollIntoView({ behavior: 'smooth' });
+    });
+    el.querySelector('#rootQuizBtn').onclick = () => {
+      const q = makeRootQuiz();
+      if (!q) { App.toast('词根数据加载中'); return; }
+      rootQuiz = q;
+      renderRootQuiz(el);
+    };
+  }
+
+  function makeRootQuiz() {
+    const roots = (window.WORD_ROOTS || []).filter(r => r.ex && r.ex.length);
+    if (!roots.length) return null;
+    const r = roots[Math.floor(Math.random() * roots.length)];
+    const target = r.ex[Math.floor(Math.random() * r.ex.length)];
+    const bank = App.WMAP();
+    const correct = (bank[target[0]] || {}).gloss || target[1] || '';
+    const pool = shuffle2(roots.flatMap(x => x === r ? [] : x.ex)).filter(x => x[0] !== target[0]);
+    const opts = shuffle2([[correct, true]].concat(pool.slice(0, 3).map(p => [(bank[p[0]] || {}).gloss || p[1], false])));
+    return {
+      root: r, word: target[0],
+      exp: target[2] || (r.r + ' = ' + r.m),
+      opts: opts.map(o => o[0]),
+      answer: opts.findIndex(o => o[1])
+    };
+  }
+  function shuffle2(arr) { const a = arr.slice(); for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; } return a; }
+
+  function renderRootQuiz(el) {
+    const q = rootQuiz;
+    el.innerHTML = `<div class="card" style="max-width:620px;margin:0 auto">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
+        <button class="btn plain sm" id="backRoots">‹ 返回词根表</button>
+        <span class="tag">词根：${q.root.r} = ${q.root.m}</span>
+      </div>
+      <div class="flashcard" style="cursor:default">
+        <div class="fw">${q.word}</div>
+        <div class="hint">已知词根 <b style="color:var(--pri)">${q.root.r}</b>（${q.root.m}），推断这个词的含义</div>
+      </div>
+      <div id="rqOpts">${q.opts.map((o, i) => `<div class="opt" data-i="${i}"><span class="k">${'ABCD'[i]}</span><span>${App.esc(o)}</span></div>`).join('')}</div>
+      <div id="rqFb"></div>
+    </div>`;
+    el.querySelector('#backRoots').onclick = () => { rootQuiz = null; renderRoots(el); };
+    el.querySelectorAll('#rqOpts .opt').forEach(o => o.onclick = () => {
+      const i = +o.dataset.i;
+      const ok = i === q.answer;
+      el.querySelectorAll('#rqOpts .opt').forEach((oo, j) => { if (j === q.answer) oo.classList.add('right'); });
+      if (!ok) o.classList.add('wrong'); else o.classList.add('right');
+      el.querySelectorAll('#rqOpts .opt').forEach(x => x.style.pointerEvents = 'none');
+      el.querySelector('#rqFb').innerHTML = `<div class="fb-item ${ok ? 'good' : 'bad'}"><b>${ok ? '✓ 推断正确' : '✗ 应选 ' + 'ABCD'[q.answer]}</b><span>拆解：${App.esc(q.exp)}<br><button class="btn ghost sm" id="nextQ" style="margin-top:6px">下一题 →</button></span></div>`;
+      el.querySelector('#nextQ').onclick = () => { rootQuiz = makeRootQuiz(); renderRootQuiz(el); };
+    });
   }
 
   /* ---------- 速刷 ---------- */

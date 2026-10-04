@@ -6,22 +6,65 @@ App.Views.placement = App.Views.placement || {};
   function build() {
     const words = App.allWords();
     const pick = (tier, n) => App.randPick(words.filter(w => w.tier === tier), n);
-    // 四级：常用为主；六级：常用→六级高频→六级冲刺梯度抽题
-    const mix = App.store.profile.exam === 'cet4'
-      ? [['t4c', 10], ['t4h', 6], ['t4s', 4]]
-      : [['t4c', 5], ['t4h', 3], ['t6h', 7], ['t6s', 5]];
-    const sel = mix.reduce((acc, [tier, n]) => acc.concat(pick(tier, n)), []);
-    return sel.map(entry => {
+    const exam = App.store.profile.exam || 'cet6';
+    // 题型配比：12 词义 + 4 短语 + 4 句子语境 = 20 题
+    const wordMix = exam === 'cet4'
+      ? [['t4c', 6], ['t4h', 4], ['t4s', 2]]
+      : [['t4c', 3], ['t4h', 2], ['t6h', 4], ['t6s', 3]];
+    const qs = wordMix.reduce((acc, [tier, n]) => acc.concat(pick(tier, n)), []).map(entry => {
       const ds = App.glossDistractors(entry, 3);
       const opts = App.shuffle([entry].concat(ds)).map(e => e.gloss);
-      return { w: entry.w, gloss: entry.gloss, tier: entry.tier, opts, answer: opts.indexOf(entry.gloss) };
+      return { kind: 'word', w: entry.w, gloss: entry.gloss, tier: entry.tier, opts, answer: opts.indexOf(entry.gloss) };
     });
+    // 短语题
+    const phrases = window.PLACEMENT_PHRASES || [];
+    App.shuffle(phrases).slice(0, 4).forEach(p => {
+      const ds = App.randPick(phrases.filter(x => x !== p), 3).map(x => x[1]);
+      const opts = App.shuffle([p[1]].concat(ds));
+      qs.push({ kind: 'phrase', w: p[0], gloss: p[1], opts, answer: opts.indexOf(p[1]) });
+    });
+    // 句子语境题：从真题风格例句库取词，考"句中含义"（不足则跳过）
+    const sentWords = App.randPick(Object.keys(window.EXAMPLES || {}), 8);
+    sentWords.forEach(w => {
+      if (qs.length >= 20) return;
+      const entry = App.WMAP()[w];
+      const ex = (window.EXAMPLES || {})[w];
+      if (!entry || !ex) return;
+      const ds = App.glossDistractors(entry, 3);
+      const opts = App.shuffle([entry].concat(ds)).map(e => e.gloss);
+      qs.push({ kind: 'sent', w: w, gloss: entry.gloss, sent: ex[0], opts, answer: opts.indexOf(entry.gloss) });
+    });
+    // 兜底：因个别例句词缺失不足 20 题时，用单词题补齐
+    const usedW = new Set(qs.map(q => q.w));
+    while (qs.length < 20) {
+      const extra = pick(wordMix[qs.length % wordMix.length][0], 1)[0];
+      if (!extra || usedW.has(extra.w)) {
+        const anyW = App.randPick(words.filter(w => !usedW.has(w.w)), 1)[0];
+        if (!anyW) break;
+        const ds = App.glossDistractors(anyW, 3);
+        const opts = App.shuffle([anyW].concat(ds)).map(e => e.gloss);
+        qs.push({ kind: 'word', w: anyW.w, gloss: anyW.gloss, tier: anyW.tier, opts, answer: opts.indexOf(anyW.gloss) });
+        usedW.add(anyW.w);
+        continue;
+      }
+      const ds = App.glossDistractors(extra, 3);
+      const opts = App.shuffle([extra].concat(ds)).map(e => e.gloss);
+      qs.push({ kind: 'word', w: extra.w, gloss: extra.gloss, tier: extra.tier, opts, answer: opts.indexOf(extra.gloss) });
+      usedW.add(extra.w);
+    }
+    return qs.slice(0, 20);
   }
 
+  App.Views.placement.kinds = function () { return state && state.qs ? state.qs.map(q => q.kind) : null; };
+  App.Views.placement.state = function () { return state; };
+  App.Views.placement.debugBuild = function () { return build(); };
+
   function result(s) {
+    const KIND_LABEL = { word: '单词', phrase: '短语', sent: '语境' };
     const byLv = { 1: [0, 0], 2: [0, 0], 3: [0, 0] };
     s.qs.forEach((q, i) => {
-      const lv = (App.TIERS[q.tier] || {}).lv || 2;
+      const lv = (App.TIERS[q.tier] || {}).lv;
+      if (!lv) return;   // 短语/语境题不计入分档统计
       byLv[lv][1]++;
       if (s.answers[i] === q.answer) byLv[lv][0]++;
     });
@@ -29,6 +72,8 @@ App.Views.placement = App.Views.placement || {};
     // 逐词回顾：每题的正确/错误明细
     const review = s.qs.map((q, i) => ({
       w: q.w,
+      kind: KIND_LABEL[q.kind] || '单词',
+      sent: q.sent || null,
       ok: s.answers[i] === q.answer,
       your: s.answers[i] == null ? '未作答' : q.opts[s.answers[i]],
       correct: q.opts[q.answer]
@@ -59,9 +104,12 @@ App.Views.placement = App.Views.placement || {};
         </div>
         ${p.placed ? `<div class="note" style="margin-bottom:12px">当前定级：${App.lvTierLabel(p.startLevel) || App.examName()} · 每日 ${p.dailyNew} 新词（重新测试会更新计划，已背词不受影响）</div>` : ''}
         <button class="btn big" id="startBtn">开始测试</button>
+        <div style="margin-top:14px"><button class="btn plain sm" id="switchExam">← 返回重新选择级别（四级 / 六级）</button></div>
       </div>`;
+    el.querySelector('#switchExam').onclick = () => { V.reset(); App.go('welcome'); };
     el.querySelector('#startBtn').onclick = () => {
       state = { mode: 'testing', qs: build(), idx: 0, answers: new Array(20).fill(null), left: 300, spokenIdx: -1, locked: false };
+      state.answers = new Array(state.qs.length).fill(null);
       renderTest(el);
     };
   };
@@ -71,27 +119,40 @@ App.Views.placement = App.Views.placement || {};
     el.innerHTML = `
       <div class="card" style="max-width:680px;margin:20px auto">
         <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px">
-          <b>第 ${s.idx + 1} / 20 题</b>
+          <b>第 ${s.idx + 1} / ${s.qs.length} 题</b>
           <span style="display:flex;gap:10px;align-items:center">
             <span class="note">点选释义后自动进入下一题</span>
             <span class="timer" id="tLeft">05:00</span>
           </span>
         </div>
-        <div class="progress" style="margin-bottom:18px"><i style="width:${s.idx / 20 * 100}%"></i></div>
+        <div class="progress" style="margin-bottom:18px"><i style="width:${s.idx / s.qs.length * 100}%"></i></div>
         <div id="qBox"></div>
         <div style="display:flex;justify-content:space-between;margin-top:16px;align-items:center">
-          <span class="note">已答 ${s.answers.filter(a => a != null).length} / 20</span>
+          <span class="note">已答 ${s.answers.filter(a => a != null).length} / ${s.qs.length}</span>
           <button class="btn plain sm" id="finishEarly">提前交卷</button>
         </div>
       </div>`;
     const qBox = el.querySelector('#qBox');
     const paint = () => {
       const q = s.qs[s.idx];
-      qBox.innerHTML = `<div style="text-align:center;font-size:30px;font-weight:800;margin:14px 0 4px">${q.w} <button class="ico-btn" id="spk" title="点击重听">🔊</button></div>
-        <div class="note" style="text-align:center;margin-bottom:14px">选出正确的中文释义</div>
-        ${q.opts.map((o, i) => `<div class="opt ${s.answers[s.idx] === i ? 'sel' : ''}" data-i="${i}"><span class="k">${'ABCD'[i]}</span><span>${App.esc(o)}</span></div>`).join('')}`;
+      const KIND_LABEL = { word: '单词释义', phrase: '短语辨析', sent: '句子语境选义' };
+      let stem;
+      if (q.kind === 'sent') {
+        // 句子语境：目标词加粗高亮
+        const re = new RegExp('\\b' + q.w.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '\\w*', 'i');
+        const marked = App.esc(q.sent).replace(re, m => '<b style="color:var(--pri)">' + m + '</b>');
+        stem = `<div class="passage" style="max-height:none;margin:6px 0 10px;font-style:italic">${marked}</div>
+          <div style="text-align:center"><b style="font-size:22px;color:var(--pri)">${q.w}</b></div>
+          <div class="note" style="text-align:center;margin:4px 0 10px">【${KIND_LABEL[q.kind]}】句中该词的含义最接近</div>`;
+      } else {
+        stem = `<div style="text-align:center;font-size:${q.kind === 'phrase' ? 26 : 30}px;font-weight:800;margin:14px 0 4px">${App.esc(q.w)} <button class="ico-btn" id="spk" title="点击重听">🔊</button></div>
+          <div class="note" style="text-align:center;margin-bottom:14px">【${KIND_LABEL[q.kind]}】${q.kind === 'sent' ? '' : '选出正确的中文释义'}</div>`;
+      }
+      qBox.innerHTML = stem +
+        q.opts.map((o, i) => `<div class="opt ${s.answers[s.idx] === i ? 'sel' : ''}" data-i="${i}"><span class="k">${'ABCD'[i]}</span><span>${App.esc(o)}</span></div>`).join('');
       qBox.querySelectorAll('.opt').forEach(o => o.onclick = () => pickOption(+o.dataset.i));
-      qBox.querySelector('#spk').onclick = () => App.speak(q.w);
+      const spk = qBox.querySelector('#spk');
+      if (spk) spk.onclick = () => App.speak(q.w);
       // 单词首次出现自动朗读
       if (s.spokenIdx !== s.idx) { s.spokenIdx = s.idx; App.speak(q.w); }
     };
@@ -104,7 +165,7 @@ App.Views.placement = App.Views.placement || {};
       const delay = window.__TEST_FAST__ ? 15 : 320;
       setTimeout(() => {
         s.locked = false;
-        if (s.idx < 19) { s.idx++; renderTest(el); }
+        if (s.idx < s.qs.length - 1) { s.idx++; renderTest(el); }
         else finish(el);
       }, delay);
     };
@@ -154,9 +215,10 @@ App.Views.placement = App.Views.placement || {};
           <div class="list-row" style="cursor:pointer" data-sp="${x.w}">
             <span class="badge ${x.ok ? 'ok' : 'bad'}" style="min-width:44px;text-align:center">${x.ok ? '✓ 对' : '✗ 错'}</span>
             <div style="flex:1;min-width:0">
-              <b>${x.w}</b>
+              <b>${App.esc(x.w)}</b> <span class="tag">${x.kind}</span>
               ${x.ok ? `<span class="note">${App.esc(x.correct)}</span>`
                 : `<div class="note">你的选择：${App.esc(x.your)}<br>正确释义：<b style="color:var(--ok)">${App.esc(x.correct)}</b></div>`}
+              ${x.sent ? `<div class="note" style="font-style:italic;opacity:.8">原句：${App.esc(x.sent)}</div>` : ''}
             </div>
             <button class="ico-btn" data-sp2="${x.w}">🔊</button>
           </div>`).join('')}
