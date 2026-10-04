@@ -98,7 +98,7 @@ App.Listening = {};
         const tag = el.querySelector('[data-audio="' + k.replace(/^au_/, '') + '"]');
         if (tag) tag.textContent = '✓ 已有原音';
       });
-    });
+    }).catch(() => {});
   }
 
   /* ---------- 练习页 ---------- */
@@ -270,8 +270,13 @@ App.Listening = {};
       zone.querySelector('#auImport').onclick = () => file.click();
       file.onchange = async () => {
         if (!file.files[0]) return;
-        await App.audb.put('au_' + S.set.id, file.files[0]);
-        App.toast('原音已导入并保存到本机');
+        try {
+          await App.audb.put('au_' + S.set.id, file.files[0]);
+          App.toast('原音已导入并保存到本机');
+        } catch (e) {
+          App.toast('导入失败：' + (e.message || '本地音频存储不可用') + '。可改用系统朗读演练。');
+          return;
+        }
         V.render(document.getElementById('view'), { id: S.set.id });
       };
       const tts = zone.querySelector('#ttsBtn'), stop = zone.querySelector('#ttsStop');

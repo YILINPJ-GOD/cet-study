@@ -6,6 +6,8 @@ tools/cloze.txt
 tools/missing_words.json
 *.log
 log-check.txt
+final.txt
+release/
 
 # 系统文件
 Thumbs.db

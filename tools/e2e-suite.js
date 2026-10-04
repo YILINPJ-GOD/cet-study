@@ -352,4 +352,31 @@ window.__E2E = {
     // 结束会话还原
     const quit = $('#quit'); if (quit) quit.click();
   });
+
+  /* ---------- GitHub 发布：file:// 兼容降级 ---------- */
+  T.add('GH-01 无 IndexedDB 环境优雅降级（模拟 file:// 直开）', async () => {
+    const desc = Object.getOwnPropertyDescriptor(window, 'indexedDB');
+    try {
+      App.audb._db = null;
+      App.audb._broken = false;
+      // indexedDB 是只读属性，需用 defineProperty 覆盖
+      Object.defineProperty(window, 'indexedDB', { get: () => undefined, configurable: true });
+      assert(window.indexedDB === undefined, '测试前提：indexedDB 应已被覆盖');
+      const ks = await App.audb.keys();
+      assert(Array.isArray(ks) && ks.length === 0, 'keys() 应返回空数组而非抛错');
+      let putErr = null;
+      try { await App.audb.put('au_x', new Blob(['x'])); } catch (e) { putErr = e; }
+      assert(putErr && /不可用/.test(putErr.message), 'put() 应给出友好错误，实际：' + (putErr && putErr.message));
+      // 听力页面在降级下正常渲染
+      App.store.profile.placed = true;
+      App.store.profile.exam = 'cet6';
+      App.go('listening', { id: 'c5' });
+      assert(viewText().includes('系统朗读演练'), '降级下听力练习页仍可用（朗读演练兜底）');
+      assert(App.currentView === 'listening', '页面不应崩溃');
+    } finally {
+      if (desc) Object.defineProperty(window, 'indexedDB', desc);
+      App.audb._db = null;
+      App.audb._broken = false;
+    }
+  });
 })(window.__E2E);
