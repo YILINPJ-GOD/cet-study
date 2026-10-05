@@ -13,3 +13,15 @@ release/
 Thumbs.db
 desktop.ini
 .DS_Store
+
+# 本地运维临时脚本
+ghrefresh.txt
+ghrel17.txt
+ghst.txt
+vfy.txt
+tools/checkpages.py
+tools/pages.py
+tools/pages2.py
+tools/pages3.py
+tools/verify.py
+tools/__pycache__/
