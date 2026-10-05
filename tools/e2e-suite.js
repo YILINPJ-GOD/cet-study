@@ -404,7 +404,7 @@ window.__E2E = {
     App.exportBackup = () => { exported++; };
     window.confirm = () => true; // 允许覆盖（真实场景用户点确定）
     App.importBackup(toFile(ok), () => {});
-    await new Promise(r => setTimeout(r, 60));
+    for (let w = 0; w < 40 && !toasts.some(x => x.includes('导入成功')); w++) await new Promise(r => setTimeout(r, 30));
     App.toast = oldToast; window.confirm = oldConfirm; App.exportBackup = oldExport;
     assert(exported >= 1, '确认导入前应自动导出应急备份');
     assert(toasts.some(t => t.includes('导入成功')), '合法备份应导入成功');
@@ -893,5 +893,93 @@ window.__E2E = {
     assert($('#genLevel') != null, '应有难度选择');
     assert($('#genWordbook') != null, '应有生词本勾选');
     assert(Array.from(document.querySelectorAll('#genTheme option')).some(o => o.textContent.includes('文化')), '主题应含文化');
+  });
+
+  /* ---------- v1.7.0：真题中心（资源导航/本地真题库/刷题记录） ---------- */
+  T.add('EX-01 资源导航数据完整且含版权声明', () => {
+    const links = window.REAL_EXAM_LINKS || [];
+    assert(links.length >= 3, '应≥3个资源站，实际 ' + links.length);
+    links.forEach(L => {
+      assert(L.name && L.url.indexOf('https://') === 0 && L.desc && L.note, '资源 ' + L.name + ' 数据不完整');
+      assert(L.levels.includes('cet4') || L.levels.includes('cet6'), L.name + ' 应标注级别');
+    });
+    assert(/考试委员会/.test(window.REAL_EXAM_DISCLAIMER || ''), '应有版权归属声明');
+    assert(/不收录|不分发/.test(window.REAL_EXAM_DISCLAIMER || ''), '应声明 App 不收录不分发');
+    // 页面渲染
+    App.store.profile.placed = true;
+    App.store.profile.exam = 'cet6';
+    App.go('realexam');
+    assert(viewText().includes('版权说明'), '页面应显示版权说明');
+    assert(viewText().includes('CET46-Resources'), '应包含 GitHub 资源站');
+    assert(viewText().includes('懒笔记'), '应包含懒笔记资源站');
+    assert($$('#reBody a[target="_blank"]').length >= 3, '应有打开站点外链');
+  });
+
+  T.add('EX-02 本地真题文件库：kind识别/存取回环/删除', async () => {
+    assert(App.retx.kindOf('2023.06 真题.pdf') === 'paper', 'pdf 应识别为试卷');
+    assert(App.retx.kindOf('listening.mp3') === 'audio', 'mp3 应识别为听力');
+    assert(App.retx.kindOf('photo.png') === null, '不支持的类型应返回 null');
+    const blob = new Blob(['%PDF-1.4 fake'], { type: 'application/pdf' });
+    await App.retdb.put('re_test', blob);
+    const got = await App.retdb.get('re_test');
+    assert(got && got.size === blob.size, '取回应得到相同大小 blob');
+    await App.retdb.del('re_test');
+    assert((await App.retdb.get('re_test')) === null, '删除后应为空');
+  });
+
+  T.add('EX-03 本地真题库：导入元数据/列表/删除流程', async () => {
+    App.store.profile.placed = true;
+    App.store.profile.exam = 'cet6';
+    App.store.realExams = [];
+    App.go('realexam');
+    const libTab = Array.from(document.querySelectorAll('#view .tab')).find(t => t.textContent.includes('本地真题库'));
+    libTab.click();
+    assert($('#reImportBtn') != null, '应有导入按钮');
+    // 模拟导入（绕过文件选择器：直接写存储 + 刷新视图）
+    const blob = new Blob(['%PDF-1.4 test paper content'], { type: 'application/pdf' });
+    const key = 're_cet6_2024_6_' + Date.now();
+    await App.retdb.put(key, blob);
+    App.store.realExams.push({ key, kind: 'paper', level: 'cet6', year: 2024, month: 6, name: '2024年6月第一套.pdf', size: blob.size, label: '第一套', date: Date.now() });
+    App.save();
+    App.go('realexam');
+    const libTab2 = Array.from(document.querySelectorAll('#view .tab')).find(t => t.textContent.includes('本地真题库'));
+    libTab2.click();
+    assert(viewText().includes('2024.06'), '列表应显示导入的真题');
+    assert(viewText().includes('第一套'), '应显示备注标签');
+    // 删除
+    const oldConfirm = window.confirm; window.confirm = () => true;
+    H.click('[data-delre="' + key + '"]');
+    window.confirm = oldConfirm;
+    await new Promise(r => setTimeout(r, 80));
+    assert(!(App.store.realExams || []).some(x => x.key === key), '删除后元数据应移除');
+    assert((await App.retdb.get(key)) === null, '删除后文件应移除');
+  });
+
+  T.add('EX-04 刷题记录：录入/统计/425分数线/删除', () => {
+    App.store.profile.placed = true;
+    App.store.profile.exam = 'cet6';
+    App.store.realScores = [];
+    App.go('realexam');
+    const scTab = Array.from(document.querySelectorAll('#view .tab')).find(t => t.textContent.includes('刷题记录'));
+    scTab.click();
+    document.querySelector('#scLevel').value = 'cet6';
+    document.querySelector('#scLabel').value = '2024.06 第一套';
+    document.querySelector('#scTotal').value = '480';
+    document.querySelector('#scL').value = '180';
+    document.querySelector('#scR').value = '160';
+    document.querySelector('#scW').value = '140';
+    H.click('#scAdd');
+    assert(App.store.realScores.length === 1, '应录入一条记录');
+    document.querySelector('#scTotal').value = '560';
+    H.click('#scAdd');
+    assert(App.store.realScores.length === 2, '应录入第二条');
+    assert(viewText().includes('平均分'), '应显示平均分统计');
+    assert(viewText().includes('最高分'), '应显示最高分统计');
+    assert(viewText().includes('425') || viewText().includes('分数'), '应体现分数线信息');
+    // 删除一条
+    const oldConfirm = window.confirm; window.confirm = () => true;
+    H.click('[data-delsc="' + App.store.realScores[0].id + '"]');
+    window.confirm = oldConfirm;
+    assert(App.store.realScores.length === 1, '删除后应剩一条');
   });
 })(window.__E2E);

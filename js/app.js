@@ -9,9 +9,10 @@
     ['writing', '✍️', '写作专项', 'Writing'],
     ['translation', '🀄', '翻译专项', 'Translation'],
     ['mock', '⏱', '冲刺模考', 'Mock Exam'],
+    ['realexam', '📜', '真题中心', 'Past Papers'],
     ['wordbook', '⭐', '生词本', 'Word Book']
   ];
-  const TITLES = { home: '首页看板', welcome: '选择备考级别', placement: '入学水平测试', vocab: '核心词汇记忆系统', listening: '听力专项 · 真题原音精听', reading: '阅读专项训练', writing: '写作专项 · AI 批改', translation: '翻译专项训练', mock: '冲刺模考', wordbook: '生词本' };
+  const TITLES = { home: '首页看板', welcome: '选择备考级别', placement: '入学水平测试', vocab: '核心词汇记忆系统', listening: '听力专项 · 真题原音精听', reading: '阅读专项训练', writing: '写作专项 · AI 批改', translation: '翻译专项训练', mock: '冲刺模考', realexam: '真题中心 · 资源与本地库', wordbook: '生词本' };
 
   App.currentView = 'home';
   App.EXAM_NAMES = { cet4: '四级', cet6: '六级' };

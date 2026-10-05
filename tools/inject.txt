@@ -1,0 +1,6 @@
+(async () => {
+  const src = await (await fetch('tools/e2e-suite.js?v=' + Date.now())).text();
+  const fn = new Function(src);
+  fn.call(window);
+  return (window.__E2E && window.__E2E.cases) ? window.__E2E.cases.length : -1;
+})()

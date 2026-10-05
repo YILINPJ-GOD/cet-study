@@ -13,6 +13,8 @@ App.defaultStore = function () {
     days: {},           // 'YYYY-MM-DD' -> {sec, newW, revW}
     practice: { reading: [], listening: [], vocab: [] },
     genBank: [],        // 智能生成的题源库 [{id,type,theme,date,set}]
+    realExams: [],      // 本地导入的真题文件元数据 [{key,kind,level,year,month,name,size,label,date}]
+    realScores: [],     // 真题刷题记录 [{id,level,label,total,sub,date}]
     essays: [],
     translations: [],
     mocks: [],
@@ -33,6 +35,8 @@ App.load = function () {
     // practice 子键归一化（防止旧版/部分备份缺数组导致崩溃）
     for (const k of ['reading', 'listening', 'vocab']) if (!Array.isArray(App.store.practice[k])) App.store.practice[k] = [];
     if (!Array.isArray(App.store.genBank)) App.store.genBank = [];
+    if (!Array.isArray(App.store.realExams)) App.store.realExams = [];
+    if (!Array.isArray(App.store.realScores)) App.store.realScores = [];
   } else {
     App.store = def;
   }
