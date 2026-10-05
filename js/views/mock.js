@@ -3,7 +3,9 @@ App.Views.mock = App.Views.mock || {};
 (function () {
   const SETS = [
     { id: 'A', name: '模考卷 A', essay: 'w1', careful: 'c1', matching: 'm1', cloze: 'k1', trans: 't7' },
-    { id: 'B', name: '模考卷 B', essay: 'w3', careful: 'c2', matching: 'm2', cloze: 'k2', trans: 't9' }
+    { id: 'B', name: '模考卷 B', essay: 'w3', careful: 'c2', matching: 'm2', cloze: 'k2', trans: 't9' },
+    { id: 'C', name: '模考卷 C', essay: 'w6', careful: 'c3', matching: 'm3', cloze: 'k3', trans: 't1' },
+    { id: 'D', name: '模考卷 D', essay: 'w8', careful: 'c2', matching: 'm1', cloze: 'k2', trans: 't3' }
   ];
   const SECS = [
     { key: 'writing', name: '✍️ 写作', min: 30 },

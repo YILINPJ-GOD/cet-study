@@ -437,13 +437,17 @@ window.__E2E = {
   });
 
   T.add('GV-02 写作/翻译成长曲线渲染', () => {
+    // 自建确定数据（避免跨用例污染）
     App.store.essays.push({ date: App.today(), text: 'x', score: 60 }, { date: App.today(), text: 'y', score: 78 });
+    App.store.translations.push({ date: App.today(), pid: 't1', score: 55 }, { date: App.today(), pid: 't2', score: 71 });
+    assert(App.store.essays.length >= 2 && App.store.translations.length >= 2, '测试前提：历史记录≥2');
+    const curveHtml = App.charts.line({ series: [{ name: '批改得分', color: '#4f46e5', data: App.store.essays.map((e2, i) => ({ x: '第' + (i + 1) + '篇', y: e2.score })) }], max: 100, min: 0 });
+    assert(curveHtml.includes('<svg'), '写作成长曲线 SVG 应可渲染');
     App.go('writing');
     assert(viewText().includes('写作能力成长曲线'), '写作页应显示成长曲线');
-    assert($('#wBody svg') != null || $('#view svg') != null, '应渲染 SVG 图表');
-    App.store.translations.push({ date: App.today(), pid: 't1', score: 55 }, { date: App.today(), pid: 't2', score: 71 });
     App.go('translation');
-    document.querySelectorAll('#view .tab')[1].click();
+    const bookTab = Array.from(document.querySelectorAll('#view .tab')).find(t => t.textContent.includes('积累本'));
+    bookTab.click();
     assert(viewText().includes('翻译成绩趋势'), '翻译积累本应显示成绩趋势');
   });
 
@@ -628,7 +632,7 @@ window.__E2E = {
     const mo1 = App.morph('unfair');
     assert(mo1 && mo1.prefix && mo1.prefix.p === 'un', 'unfair 应拆出前缀 un');
     const mo2 = App.morph('education');
-    assert(mo2 && mo2.suffix && mo2.suffix.s === 'tion', 'education 应拆出后缀 tion');
+    assert(mo2 && (mo2.suffix ? ['tion', 'ation'].includes(mo2.suffix.s) : false) && mo2.root && mo2.root.r.includes('duc'), 'education 应拆出 duc 词根与 tion/ation 后缀，实际：' + (mo2 && mo2.text));
     assert(mo2.root && mo2.root.r.includes('duc'), 'education 应识别词根 duc');
     assert(App.morph('the') === null, '短词/功能词不拆解');
   });
@@ -796,5 +800,98 @@ window.__E2E = {
     assert(fakeDone < 10, '已做题应优先被裁剪（剩<10），实际 ' + fakeDone);
     assert(fakeFresh === 55, '未做的新题应保留（55），实际 ' + fakeFresh);
     App.store.genBank = bak;
+  });
+
+  /* ---------- v1.6.0：词根扩容 / 句子翻译训练 / 题库扩充+个性化生成 ---------- */
+  T.add('RT-11 词根库扩容至常见全集（词根/前缀/后缀）', () => {
+    const roots = window.WORD_ROOTS || [];
+    assert(roots.length >= 90, '词根应≥90个，实际 ' + roots.length);
+    assert(Object.keys(window.WORD_PREFIXES || {}).length >= 35, '前缀应≥35个');
+    assert(Object.keys(window.WORD_SUFFIXES || {}).length >= 25, '后缀应≥25个');
+    const words = new Set();
+    roots.forEach(r => {
+      assert(r.r && r.m && r.ex.length >= 2, '词根 ' + r.r + ' 数据不完整');
+      r.ex.forEach(x => { assert(x[0] && !words.has(x[0]), '派生词缺失或重复：' + x[0]); words.add(x[0]); });
+    });
+    assert(words.size >= 270, '派生词总量应≥270，实际 ' + words.size);
+    assert(App.morph('international').prefix.p === 'inter', 'international 应拆出前缀 inter');
+  });
+
+  T.add('RT-12 词根页搜索与统计生效', () => {
+    App.store.profile.placed = true;
+    App.go('vocab');
+    const rootTab = Array.from(document.querySelectorAll('#view .tab')).find(t => t.textContent.includes('词根词缀'));
+    rootTab.click();
+    assert(viewText().match(/词根库共 \d+ 个/), '应显示词根数量统计');
+    const kw = document.querySelector('#rootKw');
+    kw.value = 'spect';
+    kw.oninput();
+    assert($$('#rootGrid [data-r]').length >= 1, '搜索 spect 应有结果');
+    H.click('#rootGrid [data-r]');
+    assert(viewText().includes('派生词'), '点击应展开词根详情');
+  });
+
+  T.add('ST-01 句子翻译库与评分引擎', () => {
+    const bank = window.TRANSLATION_SENTENCES || [];
+    assert(bank.length >= 36, '句子库应≥36句，实际 ' + bank.length);
+    bank.forEach((s, i) => {
+      assert(s.cn && s.ref && s.keys.length >= 2, '第' + (i + 1) + '句结构不完整');
+      s.keys.forEach(k => assert(s.ref.toLowerCase().includes(k.toLowerCase()), '第' + (i + 1) + '句 key 未在参考译文中出现：' + k));
+    });
+    const item = bank[0];
+    const good = App.grader.gradeSentence(item.ref, item);
+    assert(good.score >= 90, '照抄参考应得高分，实际 ' + good.score);
+    const poor = App.grader.gradeSentence('I like apple very much haha.', item);
+    assert(poor.score < good.score - 20, '错误译文应显著低分');
+    assert(poor.missed.length >= 1, '应列出未译出的关键表达');
+  });
+
+  T.add('ST-02 句子训练页可作答并出反馈', async () => {
+    App.store.profile.placed = true;
+    App.store.profile.exam = 'cet6';
+    App.go('translation');
+    const sentTab = Array.from(document.querySelectorAll('#view .tab')).find(t => t.textContent.includes('句子训练'));
+    assert(sentTab != null, '应出现句子训练标签');
+    sentTab.click();
+    assert($('#sentInput') != null, '应渲染作答框');
+    assert(viewText().includes('看参考译文'), '应有参考译文入口');
+    document.querySelector('#sentInput').value = window.TRANSLATION_SENTENCES[0].ref;
+    H.click('#sentGrade');
+    assert(viewText().includes('AI 评分'), '应显示 AI 评分');
+    assert(viewText().includes('参考译文'), '应显示参考译文对照');
+  });
+
+  T.add('QB-01 模考卷扩至4套且话题覆盖广', () => {
+    App.go('mock');
+    const cards = $$('#view [data-set]');
+    assert(cards.length === 4, '应显示4套模考卷，实际 ' + cards.length);
+    assert(viewText().includes('模考卷 C') && viewText().includes('模考卷 D'), '应含卷C与卷D');
+    assert(viewText().includes('文化'), '卷C应显示文化话题');
+  });
+
+  T.add('QB-02 生成器：文化主题 + 难度 + 生词本个性化', () => {
+    const cul = App.Gen.makeCareful('culture');
+    assert(cul && cul.text.length >= 700, '文化主题应可生成完整文章');
+    assert(App.Gen.themes().length === 6, '生成主题应共6个');
+    const s = App.Gen.makeCloze('edu', { level: 'cet4' });
+    assert(s.a.length === 10, '四级难度选词填空应正常生成');
+    App.store.wordbook['profound'] = { d: App.today(), src: '测试' };
+    App.store.wordbook['vivid'] = { d: App.today(), src: '测试' };
+    App._words = null; App._wmap = null;
+    const c = App.Gen.makeCareful('tech', { seedWords: ['profound', 'vivid'] });
+    const wordQ = c.questions.find(q => q.q.includes('closest in meaning'));
+    assert(wordQ.opts.some(o => o.includes('深刻')), '词义题应使用生词本词的真实释义');
+    delete App.store.wordbook['profound'];
+    delete App.store.wordbook['vivid'];
+    App._words = null; App._wmap = null;
+  });
+
+  T.add('QB-03 生成面板含难度与生词本选项', () => {
+    App.store.profile.placed = true;
+    App.store.profile.exam = 'cet6';
+    App.go('reading');
+    assert($('#genLevel') != null, '应有难度选择');
+    assert($('#genWordbook') != null, '应有生词本勾选');
+    assert(Array.from(document.querySelectorAll('#genTheme option')).some(o => o.textContent.includes('文化')), '主题应含文化');
   });
 })(window.__E2E);

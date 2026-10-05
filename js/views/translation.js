@@ -11,12 +11,66 @@ App.Views.translation = App.Views.translation || {};
   V.render = function (el, param) {
     if (param && param.pid) return renderPractice(el, param.pid);
     el.innerHTML = '<div class="tabs">' +
-      [['practice', '✍️ 主题练习'], ['book', '📒 常用表达积累本']]
+      [['practice', '✍️ 主题练习'], ['sent', '✏️ 句子训练'], ['book', '📒 常用表达积累本']]
         .map(([k, t]) => '<button class="tab ' + (tab === k ? 'active' : '') + '" data-t="' + k + '">' + t + '</button>').join('') + '</div><div id="tBody"></div>';
     el.querySelectorAll('.tab').forEach(b => b.onclick = () => { tab = b.dataset.t; V.render(el); });
     if (tab === 'practice') renderList(el.querySelector('#tBody'));
+    else if (tab === 'sent') renderSentences(el.querySelector('#tBody'));
     else renderBook(el.querySelector('#tBody'));
   };
+
+  /* ---------- 句子翻译训练 ---------- */
+  let sentIdx = null;
+  function renderSentences(el) {
+    const bank = window.TRANSLATION_SENTENCES || [];
+    if (!bank.length) { el.innerHTML = '<div class="card">句子库未加载</div>'; return; }
+    if (sentIdx == null) sentIdx = Math.floor(Math.random() * bank.length);
+    const item = bank[sentIdx % bank.length];
+    const done = (App.store.sentPractice || []).filter(s => s.id === sentIdx % bank.length);
+    el.innerHTML = `<div class="card" style="max-width:760px;margin:0 auto">
+      <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px">
+        <span class="tag">句子翻译训练</span><span class="note">第 ${sentIdx % bank.length + 1} / ${bank.length} 句 · 历史已练 ${done.length} 次</span>
+        <button class="btn plain sm" id="nextSent" style="margin-left:auto">换一句 →</button>
+      </div>
+      <div class="passage" style="max-height:none;background:#fffdf5" data-src="翻译原文">${App.esc(item.cn)}</div>
+      <textarea id="sentInput" rows="4" style="margin-top:12px" placeholder="把上面的中文句子翻译成英文…（先抓关键表达，再组合成句）"></textarea>
+      <div style="display:flex;gap:10px;margin-top:10px">
+        <button class="btn big" id="sentGrade">🤖 提交评分</button>
+        <button class="btn ghost" id="sentRef">👀 看参考译文（不计分）</button>
+      </div>
+      <div id="sentResult"></div>
+    </div>`;
+    el.querySelector('#nextSent').onclick = () => { sentIdx = (sentIdx + 1 + Math.floor(Math.random() * 3)) % bank.length; renderSentences(el); };
+    el.querySelector('#sentGrade').onclick = () => {
+      const text = el.querySelector('#sentInput').value.trim();
+      if (App.grader.tokenize(text).length < 4) { App.toast('先写出你的英文译文'); return; }
+      const r = App.grader.gradeSentence(text, item);
+      App.store.sentPractice = App.store.sentPractice || [];
+      App.store.sentPractice.push({ id: sentIdx % bank.length, date: App.today(), score: r.score });
+      if (App.store.sentPractice.length > 500) App.store.sentPractice = App.store.sentPractice.slice(-400);
+      App.save();
+      showSentResult(el, item, r);
+    };
+    el.querySelector('#sentRef').onclick = () => showSentResult(el, item, null);
+  }
+
+  function showSentResult(el, item, r) {
+    const box = el.querySelector('#sentResult');
+    const icons = { good: '✅', warn: '⚠️', bad: '❌', info: '💡' };
+    let html = '<hr class="hr"><div class="grid2" style="grid-template-columns:1fr 1fr;gap:12px">' +
+      '<div style="background:#f7f8fd;border-radius:12px;padding:12px 14px"><b class="note">✍️ 我的译文</b><div class="essay-pane" style="margin-top:6px">' + App.esc(el.querySelector('#sentInput').value.trim() || '（空）') + '</div></div>' +
+      '<div style="background:var(--teal-soft);border-radius:12px;padding:12px 14px"><b class="note">📖 参考译文</b><div class="essay-pane" style="margin-top:6px">' + App.esc(item.ref) + '</div></div></div>';
+    if (r) {
+      html += `<div class="score-dial" style="margin-top:12px">
+        <svg width="90" height="90" viewBox="0 0 110 110"><circle cx="55" cy="55" r="46" fill="none" stroke="#edeff7" stroke-width="11"/><circle cx="55" cy="55" r="46" fill="none" stroke="${r.score >= 80 ? '#16a34a' : r.score >= 60 ? '#d97706' : '#dc2626'}" stroke-width="11" stroke-linecap="round" stroke-dasharray="${(r.score / 100 * 289).toFixed(0)} 289" transform="rotate(-90 55 55)"/><text x="55" y="55" text-anchor="middle" font-size="26" font-weight="800">${r.score}</text><text x="55" y="75" text-anchor="middle" font-size="11" fill="#8b93ab">${r.grade}</text></svg>
+        <div><b>AI 评分</b><div class="note">${r.summary}</div></div></div>`;
+      html += r.items.map(it => `<div class="fb-item ${it.type}"><b>${icons[it.type]} ${App.esc(it.title)}</b><span>${App.esc(it.detail)}</span></div>`).join('');
+    }
+    html += '<h3 style="font-size:13.5px;margin-top:12px">关键表达</h3><div style="display:flex;flex-wrap:wrap;gap:8px">' +
+      item.keys.map(k => '<span class="tag">' + App.esc(k) + '</span>').join('') + '</div>';
+    box.innerHTML = html;
+    box.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+  }
 
   function allPassages() { return window.TRANSLATION_PASSAGES || []; }
 

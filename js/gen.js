@@ -41,8 +41,9 @@ App.Gen = {};
     };
   }
 
-  /* ---------- 仔细阅读生成 ---------- */
-  App.Gen.makeCareful = function (themeKey) {
+  /* ---------- 仔细阅读生成（支持个性化：难度 + 生词本植入） ---------- */
+  App.Gen.makeCareful = function (themeKey, opts) {
+    opts = opts || {};
     const theme = (window.GEN_THEMES || {})[themeKey];
     if (!theme) return null;
     const seed = (Date.now() % 100000000) + (counter++);
@@ -60,8 +61,15 @@ App.Gen = {};
     const stance = fill(theme.stance, nps, r).text;
     const title = pick(r, theme.titles);
 
-    // 词义猜测题：从目标词池取 2 词造句
-    const tws = shuffle(r, theme.twPool).slice(0, 2);
+    // 词义猜测题：优先植入个性化词（生词本/我的词库），否则用主题目标词
+    let tws = [];
+    if (opts.seedWords && opts.seedWords.length >= 2) {
+      tws = opts.seedWords.slice(0, 2).map(w => {
+        const e = App.WMAP()[w];
+        return [w, e ? e.gloss : ''];
+      }).filter(x => x[1]);
+    }
+    if (tws.length < 2) tws = shuffle(r, theme.twPool).slice(0, 2);
     const otherTw = shuffle(r, Object.keys(window.GEN_THEMES).filter(k => k !== themeKey)
       .flatMap(k => window.GEN_THEMES[k].twPool).filter(x => !tws.some(t2 => t2[0] === x[0])));
     const sent1 = pick(r, ["To many observers, the change feels utterly {tw}.", "Yet the results have been remarkably {tw} so far.", "Some early attempts proved surprisingly {tw}."]).replace('{tw}', tws[0][0]);
@@ -131,12 +139,15 @@ App.Gen = {};
     { s: "Officials responded {b} to the public's concerns.", pos: 'adv', cue: "修饰动词 responded 需要副词" }
   ];
 
-  App.Gen.makeCloze = function (themeKey) {
+  App.Gen.makeCloze = function (themeKey, opts) {
+    opts = opts || {};
     const theme = (window.GEN_THEMES || {})[themeKey];
     if (!theme) return null;
     const seed = (Date.now() % 100000000) + 5000 + (counter++);
     const r = rng(seed);
-    const bank = App.allWords();
+    const exam = opts.level || (App.store.profile.exam || 'cet6');
+    const tiers = exam === 'cet4' ? ['t4c', 't4h'] : ['t6h', 't6s', 't4h'];
+    const bank = App.allWords().filter(w => tiers.includes(w.tier));
     const pool = pos => bank.filter(w => w.tier !== 'custom' && w.gloss && w.gloss.length <= 12 &&
       (pos === 'v' ? w.pos.startsWith('v') : pos === 'adj' ? w.pos.startsWith('adj') : pos === 'n' ? w.pos.startsWith('n') : w.pos.startsWith('adv')));
     const frames = shuffle(r, CLOZE_FRAMES).slice(0, 10);

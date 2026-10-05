@@ -296,22 +296,32 @@ App.Views.vocab = App.Views.vocab || {};
     if (rootQuiz) return renderRootQuiz(el);
     el.innerHTML = `<div class="card">
       <h3>🧩 词根词缀 · 单词拆解 <button class="btn ghost sm" id="rootQuizBtn" style="margin-left:auto">🎮 拆解推断练习</button></h3>
-      <div class="note" style="margin-bottom:10px">一个词根 = 一串单词。先记住词根含义，见到生词拆一拆：前缀（改意思）+ 词根（核心义）+ 后缀（改词性）。</div>
-      <div class="grid3">${roots.map((r, i) => `<div class="topic-card" data-r="${i}">
-        <div class="tc-title"><span style="font-family:Georgia,serif;color:var(--pri)">${r.r}</span> <span class="tag">${r.m}</span></div>
-        <div class="tc-meta">${r.ex.slice(0, 3).map(x => x[0]).join(' · ')}…</div>
-      </div>`).join('')}</div>
+      <div class="note" style="margin:6px 0 10px">一个词根 = 一串单词。先记住词根含义，见到生词拆一拆：前缀（改意思）+ 词根（核心义）+ 后缀（改词性）。词根库共 ${roots.length} 个，前缀 ${Object.keys(window.WORD_PREFIXES || {}).length} 个，后缀 ${Object.keys(window.WORD_SUFFIXES || {}).length} 个。</div>
+      <input class="txt" id="rootKw" placeholder="搜索词根/含义/派生词，如 spect、看、inspect…" style="margin-bottom:10px">
+      <div class="grid3" id="rootGrid"></div>
       <div id="rootDetail" style="margin-top:14px"></div>
     </div>`;
+    const grid = el.querySelector('#rootGrid');
     const detail = el.querySelector('#rootDetail');
-    el.querySelectorAll('[data-r]').forEach(c => c.onclick = () => {
-      const r = roots[+c.dataset.r];
-      detail.innerHTML = `<div class="card" style="margin:0">
-        <h3><span style="font-family:Georgia,serif;color:var(--pri)">${r.r}</span> = ${r.m} <span class="sub">${r.ex.length} 个派生词</span></h3>
-        ${r.ex.map(x => `<div class="fb-item info"><b>${x[0]}</b><span>${App.esc(x[2] || '')}<br><span class="note">${App.esc(x[1] || (App.WMAP()[x[0]] || {}).gloss || '')}</span></span></div>`).join('')}
-      </div>`;
-      detail.scrollIntoView({ behavior: 'smooth' });
-    });
+    const kwEl = el.querySelector('#rootKw');
+    const paintGrid = () => {
+      const kw = (kwEl.value || '').trim().toLowerCase();
+      const list = roots.filter(r => !kw || r.r.includes(kw) || r.m.includes(kw) || r.ex.some(x => x[0].includes(kw) || (x[1] || '').includes(kw)));
+      grid.innerHTML = list.map(r => `<div class="topic-card" data-r="${r.r}">
+        <div class="tc-title"><span style="font-family:Georgia,serif;color:var(--pri)">${r.r}</span> <span class="tag">${r.m}</span></div>
+        <div class="tc-meta">${r.ex.slice(0, 3).map(x => x[0]).join(' · ')}…</div>
+      </div>`).join('') || '<div class="empty">没有匹配的词根</div>';
+      grid.querySelectorAll('[data-r]').forEach(c => c.onclick = () => {
+        const rr = roots.find(x => x.r === c.dataset.r);
+        detail.innerHTML = `<div class="card" style="margin:0">
+          <h3><span style="font-family:Georgia,serif;color:var(--pri)">${rr.r}</span> = ${rr.m} <span class="sub">${rr.ex.length} 个派生词</span></h3>
+          ${rr.ex.map(x => `<div class="fb-item info"><b>${x[0]}</b><span>${App.esc(x[2] || '')}<br><span class="note">${App.esc(x[1] || (App.WMAP()[x[0]] || {}).gloss || '')}</span></span></div>`).join('')}
+        </div>`;
+        detail.scrollIntoView({ behavior: 'smooth' });
+      });
+    };
+    kwEl.oninput = paintGrid;
+    paintGrid();
     el.querySelector('#rootQuizBtn').onclick = () => {
       const q = makeRootQuiz();
       if (!q) { App.toast('词根数据加载中'); return; }

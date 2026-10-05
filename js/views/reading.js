@@ -80,6 +80,11 @@ App.Reading = {}; // 模考复用的题型渲染器
         <select class="selct" id="genTheme">
           ${App.Gen.themes().map(t => '<option value="' + t.key + '">' + t.label + '</option>').join('')}
         </select>
+        <select class="selct" id="genLevel">
+          <option value="cet6">六级难度</option>
+          <option value="cet4">四级难度</option>
+        </select>
+        <label class="note" style="display:flex;align-items:center;gap:4px;cursor:pointer"><input type="checkbox" id="genWordbook"> 结合我的生词本出题</label>
         <button class="btn" id="genBtn">✨ 生成新题</button>
         <span class="badge ok" id="genStock">🤖 题源库 ${genTotal} 篇${supply.careful + supply.cloze > 0 ? ' · 今日已自动补充 ' + (supply.careful + supply.cloze) + ' 篇' : ''}</span>
       </div>
@@ -90,7 +95,15 @@ App.Reading = {}; // 模考复用的题型渲染器
     el.querySelector('#genBtn').onclick = () => {
       const type = el.querySelector('#genType').value;
       const theme = el.querySelector('#genTheme').value;
-      const set = type === 'cloze' ? App.Gen.makeCloze(theme) : App.Gen.makeCareful(theme);
+      const level = el.querySelector('#genLevel').value;
+      const useWb = el.querySelector('#genWordbook').checked;
+      let seedWords = [];
+      if (useWb) {
+        seedWords = Object.keys(App.store.wordbook).filter(w => App.WMAP()[w] && App.WMAP()[w].gloss).slice(0, 6);
+        if (seedWords.length < 2) seedWords = [];
+      }
+      const genOpts = { level, seedWords };
+      const set = type === 'cloze' ? App.Gen.makeCloze(theme, genOpts) : App.Gen.makeCareful(theme, genOpts);
       if (!set) { App.toast('生成失败，请重试'); return; }
       App.store.genBank.push({ id: set.id, type, theme, date: App.today(), set });
       App.save();

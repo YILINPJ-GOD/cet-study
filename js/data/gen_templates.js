@@ -2,6 +2,29 @@
    每个主题：nps 主题名词短语（填入句子槽位）、factTemplates 事实句（自带命题 q/a）、
    intro/stance 段落句、twPool 词义猜测题目标词（词库真实释义）、titles/summary。 */
 window.GEN_THEMES = {
+culture: {
+  label: "文化与传承",
+  titles: ["Keeping Traditions Alive", "Old Crafts, New Hands", "Heritage in a Modern City"],
+  summary: "traditional culture is being protected and reinvented for modern life",
+  nps: [["traditional festivals","传统节日"],["folk crafts","民间手工艺"],["ancient streets","古街"],["local opera","地方戏曲"],["calligraphy classes","书法课"],["heritage sites","文化遗产地"],["handmade goods","手工艺品"],["temple fairs","庙会"]],
+  intro: [
+    "In many towns, {np} are enjoying a revival that few predicted.",
+    "A quiet return to {np} is reshaping how people spend their weekends."
+  ],
+  fact: [
+    { s:"Young designers are giving {np} a modern look that appeals to tourists.", q:"What are young designers doing?", a:"Giving traditional crafts a modern look" },
+    { s:"The city spends part of its budget on protecting {np} from damage.", q:"How does the city protect heritage?", a:"Spending part of its budget on protection" },
+    { s:"Sales of {np} doubled after they appeared in short videos.", q:"What happened to sales after the videos?", a:"They doubled" },
+    { s:"Schools invite old craftsmen to teach students about {np}.", q:"Who teaches students and about what?", a:"Old craftsmen teach about heritage" },
+    { s:"Some worry that turning {np} into business may weaken their meaning.", q:"What worry is mentioned?", a:"Commercial use may weaken their meaning" },
+    { s:"Museums now hold night tours where visitors experience {np} after dark.", q:"What do museums offer at night?", a:"Night tours to experience heritage" },
+    { s:"Documentaries about {np} have won large audiences among the young.", q:"Who watches the documentaries?", a:"Large young audiences" },
+    { s:"Volunteers record the memories of masters of {np} before they are lost.", q:"Why do volunteers record masters' memories?", a:"To preserve them before they are lost" }
+  ],
+  stance: "Tradition survives not by staying unchanged, but by finding new hands to carry it.",
+  twPool: [["authentic","正宗的，真正的"],["delicate","精致的"],["prospering","兴旺的"],["fragile","脆弱的"],["fashionable","时髦的"]],
+  sentiment: "warm and reflective"
+},
 tech: {
   label: "科技与人工智能",
   titles: ["AI and the Future of Work", "Smart Machines, Smarter Choices", "Living With Intelligent Machines"],

@@ -273,3 +273,39 @@ App.grader.gradeTranslation = function (userText, passage) {
     missedKeys: detail, items, ratio, dims: dimList
   };
 };
+
+/* ---------- 句子翻译评分 ---------- */
+App.grader.gradeSentence = function (userText, item) {
+  const items = [];
+  const add = (type, title, detail) => items.push({ type, title, detail });
+  const userLemmas = App.grader.lemmaSet(userText);
+  const refWords = App.grader.tokenize(item.ref).length;
+  const userWords = App.grader.tokenize(userText).length;
+  let hits = 0;
+  const missed = [];
+  for (const k of item.keys) {
+    const kws = App.grader.tokenize(k).filter(t => !G_STOP.has(t) && t.length > 2);
+    const ok = kws.length ? kws.every(t => App.grader.lemmaCandidates(t).some(c => userLemmas.has(c))) : false;
+    if (ok) hits++; else missed.push(k);
+  }
+  const ratio = item.keys.length ? hits / item.keys.length : 0;
+  let score = 40 + ratio * 50;
+  const lenRatio = refWords ? userWords / refWords : 0;
+  if (lenRatio >= 0.6 && lenRatio <= 1.7) score += 8;
+  else if (lenRatio < 0.4) { score -= 10; add('bad', '信息量不足', '你的译文 ' + userWords + ' 词，参考 ' + refWords + ' 词，可能漏译了部分信息。'); }
+  if (/^[a-z]/.test(userText.trim())) { score -= 3; add('warn', '句首未大写', '英文句首字母应大写。'); }
+  if (!/[.!?]\s*$/.test(userText.trim())) { add('info', '句末标点', '句末建议补上标点符号。'); }
+  if ((userText.match(/[\u4e00-\u9fff]/g) || []).length > 0) { score -= 12; add('bad', '混入中文', '译文里混入了中文字符，注意切换输入法。'); }
+  const unknown = App.grader.spellCheck(userText);
+  if (unknown.length) { score -= Math.min(unknown.length * 4, 12); add('warn', '疑似拼写问题', '请核对：' + unknown.join('、')); }
+  if (ratio === item.keys.length) add('good', '关键表达全部命中', '核心信息点完整，译文质量高。');
+  else add(ratio >= 0.5 ? 'info' : 'warn', '关键表达命中 ' + hits + '/' + item.keys.length, missed.length ? '未译出的表达：' + missed.join('；') : '');
+  if (lenRatio >= 0.6 && lenRatio <= 1.7) add('info', '篇幅匹配', '译文长度与参考译文相当（' + Math.round(lenRatio * 100) + '%）。');
+  score = Math.max(30, Math.min(98, Math.round(score)));
+  const grade = score >= 90 ? '优秀' : score >= 80 ? '良好' : score >= 70 ? '中等' : score >= 60 ? '基本合格' : '待提高';
+  return {
+    score, grade,
+    summary: '关键表达命中 ' + hits + '/' + item.keys.length + '，译文 ' + userWords + ' 词（参考 ' + refWords + ' 词）。',
+    hits, missed, items
+  };
+};
