@@ -11,7 +11,8 @@ App.defaultStore = function () {
     srs: {},            // word -> {b:box, due:时间戳, c:对, w:错, t:最后时间}
     wordbook: {},       // word -> {d:加入日期, src:来源}
     days: {},           // 'YYYY-MM-DD' -> {sec, newW, revW}
-    practice: { reading: [], vocab: [] },
+    practice: { reading: [], listening: [], vocab: [] },
+    genBank: [],        // 智能生成的题源库 [{id,type,theme,date,set}]
     essays: [],
     translations: [],
     mocks: [],
@@ -31,6 +32,7 @@ App.load = function () {
     for (const k of ['essays', 'translations', 'mocks', 'exprs']) if (!Array.isArray(App.store[k])) App.store[k] = [];
     // practice 子键归一化（防止旧版/部分备份缺数组导致崩溃）
     for (const k of ['reading', 'listening', 'vocab']) if (!Array.isArray(App.store.practice[k])) App.store.practice[k] = [];
+    if (!Array.isArray(App.store.genBank)) App.store.genBank = [];
   } else {
     App.store = def;
   }

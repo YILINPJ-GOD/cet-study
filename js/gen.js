@@ -175,4 +175,55 @@ App.Gen = {};
       gen: true, theme: themeKey
     };
   };
+  /* ---------- 题源自动补给 ----------
+     规则：① 每天首次打开自动补充 1 篇仔细阅读 + 1 篇选词填空；
+     ② 未做过的库存低于下限（各 2 篇）时自动补齐；
+     ③ 生成题持久化保存、可回看重做；已做过的不再计入库存；
+     ④ 总量超过 60 篇时自动裁剪最旧的已做题。 */
+  App.Gen.MIN_STOCK = 2;
+  App.Gen.GEN_CAP = 60;
+  App.Gen.autoSupply = function (nowMs) {
+    const today = App.today(new Date(nowMs || Date.now()));
+    const st = App.store;
+    if (!Array.isArray(st.genBank)) st.genBank = [];
+    const seenIds = new Set((st.practice.reading || []).filter(r => String(r.id || '').indexOf('gen-') === 0).map(r => r.id));
+    const isFresh = g => !seenIds.has(g.set.id);
+    const newDay = st.genLastDate !== today;
+    const themes = App.Gen.themes().map(t => t.key);
+    let idx = st.genThemeIdx || 0;
+    const added = { careful: 0, cloze: 0, themes: [] };
+
+    const addFor = (type) => {
+      const fresh = () => st.genBank.filter(g => g.type === type && isFresh(g)).length;
+      const need = Math.max(0, App.Gen.MIN_STOCK - fresh()) + (newDay ? 1 : 0);
+      let made = 0;
+      for (let k = 0; k < need; k++) {
+        const themeKey = themes[(idx + k) % themes.length];
+        const set = type === 'careful' ? App.Gen.makeCareful(themeKey) : App.Gen.makeCloze(themeKey);
+        if (!set) continue;
+        st.genBank.push({ id: set.id, type, theme: themeKey, date: today, set });
+        added.themes.push(themeKey);
+        made++;
+      }
+      idx += Math.max(need, 1);
+      return made;
+    };
+    added.careful = addFor('careful');
+    added.cloze = addFor('cloze');
+    st.genThemeIdx = idx;
+    st.genLastDate = today;
+
+    // 裁剪：超过上限时优先删除最旧的已做题
+    while (st.genBank.length > App.Gen.GEN_CAP) {
+      const doneIdx = st.genBank.findIndex(g => !isFresh(g));
+      if (doneIdx >= 0) st.genBank.splice(doneIdx, 1);
+      else st.genBank.shift();
+    }
+    if (added.careful + added.cloze > 0) App.save();
+    return { careful: added.careful, cloze: added.cloze, newDay, stock: { careful: st.genBank.filter(g => g.type === 'careful' && isFresh(g)).length, cloze: st.genBank.filter(g => g.type === 'cloze' && isFresh(g)).length } };
+  };
+  /* 供界面展示：某题型的生成题列表 */
+  App.Gen.bankFor = function (type) {
+    return (App.store.genBank || []).filter(g => g.type === type);
+  };
 })();

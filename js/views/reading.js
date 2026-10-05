@@ -55,6 +55,8 @@ App.Reading = {}; // 模考复用的题型渲染器
     if (param && param.type && param.id) return App.Reading['render_' + param.type](el, param.id, param.opts || {}, () => V.render(el, { type: param.type }));
     if (param && param.type) return renderType(el, param.type);
     if (param && param.gen) return renderGen(el);
+    const supply = App.Gen.autoSupply();
+    const genTotal = App.Gen.bankFor('careful').length + App.Gen.bankFor('cloze').length;
     el.innerHTML = '<div class="grid3">' + Object.keys(TYPES).map(k => {
       const t = TYPES[k];
       const sets = DATA[k]();
@@ -79,8 +81,9 @@ App.Reading = {}; // 模考复用的题型渲染器
           ${App.Gen.themes().map(t => '<option value="' + t.key + '">' + t.label + '</option>').join('')}
         </select>
         <button class="btn" id="genBtn">✨ 生成新题</button>
+        <span class="badge ok" id="genStock">🤖 题源库 ${genTotal} 篇${supply.careful + supply.cloze > 0 ? ' · 今日已自动补充 ' + (supply.careful + supply.cloze) + ' 篇' : ''}</span>
       </div>
-      <div class="note" style="margin-top:8px">生成器按主题模板即时组装全新文章与题目（细节/词义/主旨全覆盖，选词填空自动配 15 选项与逐空解析），每次生成的文章都不同；练习成绩照常计入趋势。</div>
+      <div class="note" style="margin-top:8px">生成器按主题模板即时组装全新文章与题目（细节/词义/主旨全覆盖，选词填空自动配 15 选项与逐空解析），每次生成的文章都不同；练习成绩照常计入趋势。<b>每天打开应用会自动补充新题</b>，做完题库也不会枯竭。</div>
     </div>` +
     `<div class="card"><h3>💡 练法建议</h3><div class="note">每个题型单独训练手感和节奏：仔细阅读限时 <b>9 分钟/篇</b>，长篇阅读 <b>7 分钟/篇</b>，选词填空 <b>6 分钟/篇</b>（正式考试阅读部分共 40 分钟）。做题时<b>点击文章中的任何单词</b>即可查释义并加入生词本。</div></div>`;
     el.querySelectorAll('[data-type]').forEach(c => c.onclick = () => V.render(el, { type: c.dataset.type }));
@@ -89,6 +92,8 @@ App.Reading = {}; // 模考复用的题型渲染器
       const theme = el.querySelector('#genTheme').value;
       const set = type === 'cloze' ? App.Gen.makeCloze(theme) : App.Gen.makeCareful(theme);
       if (!set) { App.toast('生成失败，请重试'); return; }
+      App.store.genBank.push({ id: set.id, type, theme, date: App.today(), set });
+      App.save();
       App.Reading['render_' + type](el, set.id, { set }, () => V.render(el));
     };
   }
@@ -98,6 +103,7 @@ App.Reading = {}; // 模考复用的题型渲染器
   function renderType(el, type) {
     const t = TYPES[type];
     const sets = DATA[type]();
+    const genSets = App.Gen.bankFor(type);
     el.innerHTML = `<div class="card"><h3>${t.icon} ${t.name} <button class="btn plain sm" id="back" style="margin-left:auto">‹ 返回</button></h3>
       <div class="note" style="margin-bottom:12px">${t.desc}</div>
       <div class="grid3">${sets.map((s, i) => {
@@ -107,9 +113,25 @@ App.Reading = {}; // 模考复用的题型渲染器
           <div class="tc-meta">第 ${i + 1} 篇 · ${type === 'careful' ? '5 题' : type === 'matching' ? s.paras.length + ' 段 5 题' : '15 选 10'}</div>
           <div style="margin-top:8px">${best == null ? '<span class="tag">未做过</span>' : '<span class="badge ' + (best >= 70 ? 'ok' : best >= 50 ? 'warn' : 'bad') + '">最好成绩 ' + best + '%</span>'}</div>
         </div>`;
-      }).join('')}</div></div>`;
+      }).join('')}</div>
+      ${genSets.length ? `<hr class="hr"><h3 style="font-size:14px">🤖 智能生成题源 <span class="sub">${genSets.length} 篇 · 自动补充</span></h3>
+      <div class="grid3">${genSets.map(g => {
+        const best = bestScore(type, g.set.id);
+        return `<div class="topic-card" data-gen="${g.id}">
+          <div class="tc-title">${App.esc(g.set.title)} <span class="badge lv2">🤖</span></div>
+          <div class="tc-meta">${g.date} · ${(window.GEN_THEMES[g.theme] || {}).label || ''}</div>
+          <div style="margin-top:8px">${best == null ? '<span class="tag">未做过</span>' : '<span class="badge ' + (best >= 70 ? 'ok' : best >= 50 ? 'warn' : 'bad') + '">最好成绩 ' + best + '%</span>'}</div>
+        </div>`;
+      }).join('')}</div>` : ''}
+    </div>`;
     el.querySelector('#back').onclick = () => V.render(el);
-    el.querySelectorAll('.topic-card').forEach(c => c.onclick = () => V.render(el, { type, id: c.dataset.id }));
+    el.querySelectorAll('.topic-card').forEach(c => c.onclick = () => {
+      if (c.dataset.gen) {
+        const g = App.Gen.bankFor(type).find(x => x.set.id === c.dataset.gen);
+        if (g) return App.Reading['render_' + type](el, g.set.id, { set: g.set }, () => V.render(el, { type }));
+      }
+      V.render(el, { type, id: c.dataset.id });
+    });
   }
 
   /* ---------- 计时器工具 ---------- */

@@ -734,4 +734,67 @@ window.__E2E = {
     const last = App.store.mocks[App.store.mocks.length - 1];
     assert(last.mode === 'real' && last.total >= 300 && last.total <= 710, '真题成绩应入库且在合理区间：' + last.total);
   });
+
+  /* ---------- v1.5.0：题源自动补充 ---------- */
+  T.add('AG-01 每日首次打开自动补充新题', () => {
+    App.store.profile.placed = true;
+    App.store.profile.exam = 'cet6';
+    App.store.genBank = [];
+    App.store.genLastDate = '2026-01-01';   // 让今天成为"新的一天"
+    const r = App.Gen.autoSupply();
+    assert(r.careful >= 1 && r.cloze >= 1, '新的一天应补充 1 阅读 + 1 选词，实际 ' + JSON.stringify(r));
+    assert(r.newDay === true, '应识别为新的一天');
+    assert(App.store.genBank.length >= 2, '生成题应持久化入库');
+    assert(App.store.genLastDate === App.today(), '应记录补充日期');
+    // 同一天再次调用：不重复每日补充
+    const before = App.store.genBank.length;
+    const r2 = App.Gen.autoSupply();
+    assert(r2.careful === 0 && r2.cloze === 0, '同一天不应重复每日补充，实际 ' + JSON.stringify(r2));
+    assert(App.store.genBank.length >= before, '库存不减少');
+  });
+
+  T.add('AG-02 库存低于下限自动补齐至2篇', () => {
+    App.store.genBank = [];
+    App.store.genLastDate = App.today();   // 今天已补过，不触发每日逻辑
+    // 只放 1 篇已做过的 careful（占用库存）
+    const s = App.Gen.makeCareful('tech');
+    App.store.genBank.push({ id: s.id, type: 'careful', theme: 'tech', date: App.today(), set: s });
+    App.store.practice.reading.push({ d: Date.now(), type: 'careful', id: s.id, c: 5, t: 5 });
+    const r = App.Gen.autoSupply();
+    const freshCareful = App.Gen.bankFor('careful').filter(g => !App.store.practice.reading.some(x => x.id === g.set.id));
+    const freshCloze = App.Gen.bankFor('cloze').filter(g => !App.store.practice.reading.some(x => x.id === g.set.id));
+    assert(r.cloze >= 2, '无库存的选词填空应补 2 篇');
+    assert(freshCareful.length >= 2 && freshCloze.length >= 2, '两类型新鲜库存都应≥2：' + freshCareful.length + '/' + freshCloze.length);
+  });
+
+  T.add('AG-03 生成题持久展示在题型页且可进入', () => {
+    App.store.profile.placed = true;
+    App.store.profile.exam = 'cet6';
+    App.go('reading', { type: 'careful' });
+    assert(viewText().includes('智能生成题源'), '题型页应展示生成题源区');
+    const genCards = $$('#view [data-gen]');
+    assert(genCards.length >= 1, '应显示生成题卡片');
+    genCards[0].click();
+    assert($('#submit') != null, '点击生成题应进入练习');
+    assert(document.querySelector('#view b') != null || viewText().length > 200, '生成文章应正常渲染');
+  });
+
+  T.add('AG-04 超过60篇自动裁剪最旧已做题', () => {
+    const bak = App.store.genBank;
+    App.store.genBank = [];
+    // 伪造 65 篇：前 10 篇标记为已做（应先被裁剪），其余 55 篇未做
+    for (let i = 0; i < 65; i++) {
+      const id = 'gen-c-fake' + i;
+      const g = { id, type: 'careful', theme: 'tech', date: '2025-01-01', set: { id, title: 'fake' + i, text: 'x', questions: [{ q: 'q', opts: ['a', 'b', 'c', 'd'], a: 0, exp: 'e' }] } };
+      App.store.genBank.push(g);
+      if (i < 10) App.store.practice.reading.push({ d: Date.now(), type: 'careful', id, c: 5, t: 5 });
+    }
+    App.Gen.autoSupply();
+    assert(App.store.genBank.length <= App.Gen.GEN_CAP, '裁剪后应≤60，实际 ' + App.store.genBank.length);
+    const fakeDone = App.store.genBank.filter(g => g.set.id.startsWith('gen-c-fake') && App.store.practice.reading.some(x => x.id === g.set.id)).length;
+    const fakeFresh = App.store.genBank.filter(g => g.set.id.startsWith('gen-c-fake') && !App.store.practice.reading.some(x => x.id === g.set.id)).length;
+    assert(fakeDone < 10, '已做题应优先被裁剪（剩<10），实际 ' + fakeDone);
+    assert(fakeFresh === 55, '未做的新题应保留（55），实际 ' + fakeFresh);
+    App.store.genBank = bak;
+  });
 })(window.__E2E);

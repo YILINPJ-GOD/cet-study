@@ -88,6 +88,8 @@
     App.load();
     // 旧数据迁移：已完成定级的老用户默认为六级
     if (App.store.profile.placed && !App.store.profile.exam) App.store.profile.exam = 'cet6';
+    // 每日自动补充智能生成题源（每天首次打开补充 1 阅读 + 1 选词）
+    try { if (App.Gen && App.Gen.autoSupply) App.Gen.autoSupply(); } catch (e) {}
     buildNav();
     App.dict.init();
     startHeartbeat();
