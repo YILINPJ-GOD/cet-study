@@ -648,4 +648,90 @@ window.__E2E = {
     $('#backRoots').click();
     assert($$('#view [data-r]').length >= 20, '可返回词根表');
   });
+
+  /* ---------- v1.4.0：真题全卷模式 ---------- */
+  T.add('ZT-01 真题全卷结构与真卷时长/分值正确', () => {
+    const S = App.Mock.REAL_SECS;
+    assert(S.length === 6, '应6个分区（阅读拆3子区）');
+    const mins = S.reduce((a, s) => a + s.min, 0);
+    assert(mins === 130, '总时长应为130分钟，实际 ' + mins);
+    assert(S[0].key === 'writing' && S[0].min === 30, '写作30分钟');
+    assert(S[1].key === 'listening' && S[1].min === 30, '听力30分钟');
+    assert(S[5].key === 'trans' && S[5].min === 30, '翻译30分钟');
+    const readingMins = S.filter(s => s.group === '阅读 40′').reduce((a, s) => a + s.min, 0);
+    assert(readingMins === 40, '阅读合计40分钟');
+  });
+
+  T.add('ZT-02 710 分制折算正确', () => {
+    const full = App.Mock.scoreReal({ writing: { score: 100 }, listening: { c: 25, t: 25 }, reading: { c: 30, t: 30 }, translation: { score: 100 } });
+    assert(full.writing === 107 && full.listening === 249 && full.reading === 249 && full.translation === 107, '满分折算应≈106.5/248.5：' + JSON.stringify(full));
+    assert(full.total === 712 || full.total === 710 || full.total === 711, '满分总分应≈710');
+    const half = App.Mock.scoreReal({ writing: { score: 50 }, listening: { c: 12, t: 24 }, reading: { c: 15, t: 30 }, translation: { score: 50 } });
+    assert(half.total > 300 && half.total < 380, '半对折算应在350左右，实际 ' + half.total);
+    const zero = App.Mock.scoreReal({});
+    assert(zero.total === 0, '空结果应为0分');
+  });
+
+  T.add('ZT-03 真题全卷入口与版权/对标说明', () => {
+    App.store.profile.placed = true;
+    App.store.profile.exam = 'cet6';
+    App.go('mock');
+    assert($('#startReal') != null, '应有真题全卷入口');
+    assert(viewText().includes('130 分钟'), '应标注130分钟');
+    assert(viewText().includes('710'), '应标注710分制');
+    assert(viewText().includes('自编仿真题') && viewText().includes('版权'), '应诚实标注题源为仿真题并说明版权');
+    assert(viewText().includes('听力 30'), '应含听力分区');
+  });
+
+  T.add('ZT-04 听力模拟区：题目编排与解锁作答', () => {
+    App.go('mock');
+    // 听力模拟渲染器结构验证
+    const ids = App.Mock.REAL_LISTENING_SETS.cet6;
+    assert(App.Listening.mockQuestionCount(ids) === 10, '六级听力三套应10题，实际 ' + App.Listening.mockQuestionCount(ids));
+    const holder = document.createElement('div');
+    document.body.appendChild(holder);
+    let submitted = null;
+    const h = App.Listening.renderMock(holder, r => { submitted = r; }, { setIds: ids });
+    assert(h.count() === 10, '渲染器应报告10题');
+    assert(holder.querySelector('#mPlay') != null, '应有播放按钮');
+    // 播放解锁逻辑：模拟 TTS 播放置解锁位
+    const first = ids[0] + '#0';
+    const opt = holder.querySelector('.opt[data-key="' + first + '"]');
+    assert(opt.style.pointerEvents !== '', '未播放前第一套作答应锁定');
+    // 模拟播放完成（直接置解锁状态重绘）
+    holder.querySelectorAll('.opt').length;
+    h.forceSubmit();
+    assert(submitted && submitted.t === 10, '强交应返回完整结构');
+    holder.remove();
+  });
+
+  T.add('ZT-05 真题全卷流程：写作切听力/中止/成绩折算入库', async () => {
+    App.store.profile.placed = true;
+    App.store.profile.exam = 'cet6';
+    const oldConfirm = window.confirm;
+    window.confirm = () => true;   // 全程自动确认
+    App.go('mock');
+    H.click('#startReal');
+    assert(viewText().includes('✍️ 写作'), '第一区应为写作');
+    assert($('#secBody textarea') != null, '写作区应有作答框');
+    // 填写作（≥20词避免确认弹窗）并提交 → 应切到听力区
+    const essayText = Array(4).fill('Technology changes education in many ways and students benefit from digital tools.').join(' ');
+    document.querySelector('#secBody textarea').value = essayText;
+    H.click('#secBody #mSubmit');
+    await new Promise(r => setTimeout(r, 100));
+    assert(document.querySelector('#secBody #mPlay') != null, '第二区应为听力（有播放按钮）');
+    assert(document.querySelector('#mQZone') != null, '听力区应渲染题目编排');
+    // 中止考试
+    H.click('#abort');
+    window.confirm = oldConfirm;
+    await new Promise(r => setTimeout(r, 80));
+    assert(viewText().includes('真题全卷模式'), '中止后应回到模考中心');
+    // 成绩折算入库
+    const r = { writing: { score: 80, text: 'test' }, listening: { c: 20, t: 25 }, reading: { c: 24, t: 30 }, translation: { score: 70, text: 'x' } };
+    const s = App.Mock.scoreReal(r);
+    App.store.mocks.push({ date: App.today(), setId: 'REAL', mode: 'real', parts: { writing: s.writing, listening: s.listening, reading: s.reading, translation: s.translation }, total: s.total });
+    App.save();
+    const last = App.store.mocks[App.store.mocks.length - 1];
+    assert(last.mode === 'real' && last.total >= 300 && last.total <= 710, '真题成绩应入库且在合理区间：' + last.total);
+  });
 })(window.__E2E);

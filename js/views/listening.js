@@ -340,6 +340,126 @@ App.Listening = {};
     box.querySelectorAll('[data-loop]').forEach(b => b.onclick = () => { jumpToSentence(+b.dataset.loop); });
   }
 
+  /* ---------- 模考·听力区：整段材料播放一遍 + 盲听作答 ---------- */
+  App.Listening.mockQuestionCount = function (setIds) {
+    const all = App.Listening.allSets();
+    return setIds.reduce((n, id) => { const s = all.find(x => x.id === id); return n + (s ? s.questions.length : 0); }, 0);
+  };
+  App.Listening.renderMock = function (body, onSubmit, opts) {
+    opts = opts || {};
+    const exam = App.store.profile.exam || 'cet6';
+    const sets = (opts.setIds || App.Listening.allSets().filter(s => s.exam === exam).map(s => s.id)).map(id => App.Listening.allSets().find(s => s.id === id)).filter(Boolean);
+    const M = { setIdx: 0, phase: 'idle', answers: {}, played: {} };
+    const totalQ = sets.reduce((n, s) => n + s.questions.length, 0);
+    function counted() { return Object.keys(M.answers).length; }
+
+    function paint() {
+      const set = sets[M.setIdx];
+      if (!set) return finish();
+      const hasAudio = M.played[set.id] === 'audio';
+      body.innerHTML = `<div class="card">
+        <h3>🎧 ${set.title} <span class="sub">第 ${M.setIdx + 1}/${sets.length} 套 · 材料仅播放一遍</span></h3>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px">
+          ${hasAudio ? '<span class="badge ok">✓ 原音已就绪</span>' : ''}
+          <button class="btn ${M.played[set.id] ? 'plain' : ''} sm" id="mPlay">${M.played[set.id] ? '↻ 重新播放本套材料' : '▶ 播放本套材料（仅一遍）'}</button>
+          ${M.played[set.id] ? '' : '<button class="btn ghost sm" id="mTts">无原音？用朗读播放</button>'}
+        </div>
+        <div class="note" style="margin-bottom:10px">考试规则：材料连续播放一遍后作答。当前已答 <b>${counted()}</b> / ${totalQ} 题。</div>
+        <div id="mQZone"></div>
+      </div>`;
+      body.querySelector('#mPlay').onclick = () => playSet(set);
+      const tts = body.querySelector('#mTts');
+      if (tts) tts.onclick = () => playTTS(set);
+      paintQuestions();
+    }
+
+    function counted2() { return counted(); }
+
+    async function playSet(set) {
+      const blob = await App.audb.get('au_' + set.id).catch(() => null);
+      if (blob) {
+        M.played[set.id] = 'audio';
+        const url = URL.createObjectURL(blob);
+        const au = new Audio(url);
+        M.au = au;
+        paint();
+        au.play().catch(() => {});
+        au.onended = () => { URL.revokeObjectURL(url); unlock(set); };
+        return;
+      }
+      playTTS(set);
+    }
+
+    function playTTS(set) {
+      M.played[set.id] = M.played[set.id] || 'tts';
+      M.setUnlocked = M.setUnlocked || {};
+      M.setUnlocked[set.id] = true;
+      paint();
+      const sns = set.sentences;
+      let i = 0;
+      const next = () => {
+        if (i >= sns.length) return;
+        const u = new SpeechSynthesisUtterance(sns[i].en);
+        u.lang = App.speakLang(); u.rate = 0.95;
+        u.onend = () => { i++; setTimeout(next, 500); };
+        try { speechSynthesis.speak(u); } catch (e) {}
+      };
+      next();
+    }
+
+    function unlock(set) {
+      M.setUnlocked = M.setUnlocked || {};
+      M.setUnlocked[set.id] = true;
+      paint();
+    }
+
+    function paintQuestions() {
+      const zone = body.querySelector('#mQZone');
+      let html = '';
+      sets.forEach((set, si) => {
+        if (si > M.setIdx) return;
+        const unlocked = (M.setUnlocked || {})[set.id];
+        html += `<div style="margin:6px 0 10px"><b>【第 ${si + 1} 套】${set.title}</b> ${unlocked ? '' : '<span class="note">（播放本套材料后解锁作答）</span>'}</div>`;
+        set.questions.forEach((q, qi) => {
+          const key = set.id + '#' + qi;
+          const val = M.answers[key];
+          html += `<div style="margin-bottom:12px"><b>${qi + 1}. ${App.esc(q.q)}</b>` +
+            q.opts.map((o, j) => `<div class="opt ${val === j ? 'sel' : ''}" data-key="${key}" data-o="${j}" style="${unlocked ? '' : 'pointer-events:none;opacity:.45'}"><span class="k">${'ABCD'[j]}</span><span>${App.esc(o)}</span></div>`).join('') +
+            `</div>`;
+        });
+      });
+      html += `<button class="btn big" id="mSubmit" ${counted() === 0 ? 'disabled' : ''}>提交听力部分（${counted()}/${totalQ}）</button>
+        <span class="note" style="margin-left:10px">提交后进入下一考试区，不可返回</span>`;
+      zone.innerHTML = html;
+      zone.querySelectorAll('.opt').forEach(o => o.onclick = () => {
+        M.answers[o.dataset.key] = +o.dataset.o;
+        paintQuestions();
+      });
+      zone.querySelector('#mSubmit').onclick = () => {
+        try { speechSynthesis.cancel(); } catch (e) {}
+        if (M.au) { try { M.au.pause(); } catch (e) {} }
+        finish();
+      };
+    }
+
+    function finish() {
+      let c = 0, t = 0;
+      const detail = [];
+      sets.forEach(set => {
+        set.questions.forEach((q, qi) => {
+          const a = M.answers[set.id + '#' + qi];
+          t++;
+          if (a === q.a) c++;
+          detail.push({ set: set.id, q: qi, a: a == null ? null : a, correct: q.a });
+        });
+      });
+      onSubmit({ c, t, detail, total: totalQ });
+    }
+
+    paint();
+    return { forceSubmit: finish, count: () => totalQ };
+  };
+
   function renderQuestions(reviewSaved) {
     const set = S.set;
     const card = document.getElementById('qCard');

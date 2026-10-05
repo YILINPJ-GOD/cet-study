@@ -14,9 +14,41 @@ App.Views.mock = App.Views.mock || {};
   ];
   let run = null; // {setId, secIdx, results:{writing:{score},careful:{c,t},...}}
 
+  /* ===== 真题全卷模式：真实结构/时长/710 分制 ===== */
+  App.Mock = {};
+  App.Mock.REAL_SECS = [
+    { key: 'writing', name: '✍️ 写作', short: '写作', min: 30 },
+    { key: 'listening', name: '🎧 听力', short: '听力', min: 30 },
+    { key: 'rcloze', name: '🧪 阅读·选词填空', short: '选词', min: 12, group: '阅读 40′' },
+    { key: 'rmatch', name: '🧩 阅读·长篇匹配', short: '匹配', min: 12, group: '阅读 40′' },
+    { key: 'rcareful', name: '🔍 阅读·仔细阅读', short: '仔细', min: 16, group: '阅读 40′' },
+    { key: 'trans', name: '🀄 翻译', short: '翻译', min: 30 }
+  ];
+  App.Mock.REAL_LISTENING_SETS = { cet4: ['n1', 'c1', 'p1'], cet6: ['c5', 'p5', 'l1'] };
+  App.Mock.REAL_READING_SETS = { cloze: 'k1', match: 'm1', careful: 'c1' };
+  /* 710 分制折算：写作 106.5 · 听力 248.5 · 阅读 248.5 · 翻译 106.5 */
+  App.Mock.scoreReal = function (r) {
+    const w = Math.round(106.5 * (r.writing ? r.writing.score / 100 : 0));
+    const l = Math.round(248.5 * (r.listening ? r.listening.c / Math.max(1, r.listening.t) : 0));
+    const rd = Math.round(248.5 * (r.reading ? r.reading.c / Math.max(1, r.reading.t) : 0));
+    const t = Math.round(106.5 * (r.translation ? r.translation.score / 100 : 0));
+    return { writing: w, listening: l, reading: rd, translation: t, total: w + l + rd + t };
+  };
+  App.Mock.scoreQuick = function (r) {
+    const readingC = (r.careful ? r.careful.c : 0) + (r.matching ? r.matching.c : 0) + (r.cloze ? r.cloze.c : 0);
+    const readingT = (r.careful ? r.careful.t : 0) + (r.matching ? r.matching.t : 0) + (r.cloze ? r.cloze.t : 0);
+    return {
+      writing: r.writing ? Math.round(r.writing.score / 100 * 106.5) : 0,
+      reading: Math.round(readingC / (readingT || 1) * 248.5),
+      trans: r.trans ? r.trans.estCET : 0,
+      readingDetail: readingC + '/' + readingT
+    };
+  };
+
   const V = App.Views.mock;
   V.reset = function () { run = null; };
   V.render = function (el) {
+    if (run && run.mode === 'real') return renderRealRun(el);
     if (run) return renderRun(el);
     el.innerHTML = `
       <div class="card">
@@ -34,12 +66,110 @@ App.Views.mock = App.Views.mock || {};
           }).join('')}
         </div>
       </div>
-      ${App.store.mocks.length ? `<div class="card"><h3>模考记录</h3>${App.store.mocks.slice().reverse().slice(0, 6).map(m => `<div class="list-row"><span class="tag">${m.date}</span><b>${m.setId} 卷</b><div style="flex:1" class="note">写作 ${m.parts.writing || '—'} 分 · 阅读 ${m.parts.reading} · 翻译 ${m.parts.trans || '—'} 分</div><span class="badge ${m.total >= 330 ? 'ok' : 'warn'}" style="font-size:13px">预估 ${m.total}/461.5</span></div>`).join('')}</div>` : ''}`;
+      ${App.store.mocks.length ? `<div class="card"><h3>模考记录</h3>${App.store.mocks.slice().reverse().slice(0, 6).map(m => `<div class="list-row"><span class="tag">${m.date}</span><b>${m.setId} 卷</b><div style="flex:1" class="note">${m.mode === 'real' ? '真题全卷 · 710 制' : '写作 ' + (m.parts.writing || '—') + ' 分 · 阅读 ' + m.parts.reading + ' · 翻译 ' + (m.parts.trans || '—') + ' 分'}</div><span class="badge ${m.total >= (m.mode === 'real' ? 425 : 330) ? 'ok' : 'warn'}" style="font-size:13px">预估 ${m.total}${m.mode === 'real' ? '/710' : '/461.5'}</span></div>`).join('')}</div>` : ''}
+      <div class="card">
+        <h3>🏛 真题全卷模式 <span class="sub">真实结构 · 真实时长 · 710 分制 · 含听力</span></h3>
+        <div class="note" style="margin-bottom:12px">完全对标真卷流程：<b>写作 30′ → 听力 30′ → 阅读 40′（选词/匹配/仔细）→ 翻译 30′</b>，共 130 分钟，到时自动切区。交卷按真卷分值折算 710 分制预估分（写作 106.5 · 听力 248.5 · 阅读 248.5 · 翻译 106.5）。<br>📌 题源说明：本模式题源为自编仿真题（结构对标 2020–2024 真卷）；真题原题受版权保护不予收录，冲刺阶段请搭配正版真题集，用本模式模拟考场节奏。</div>
+        <button class="btn big" id="startReal">🏛 开始真题全卷（${App.examName()} · 130 分钟）</button>
+        ${App.store.mocks.filter(m => m.mode === 'real').length ? '<span class="tag" style="margin-left:10px">已完成 ' + App.store.mocks.filter(m => m.mode === 'real').length + ' 次 · 最近 ' + App.store.mocks.filter(m => m.mode === 'real').pop().total + ' 分</span>' : ''}
+      </div>`;
     el.querySelectorAll('[data-set]').forEach(c => c.onclick = () => {
       if (!App.confirmBox('模考全程约 93 分钟，中途退出不计成绩。确定开始吗？')) return;
       run = { setId: c.dataset.set, secIdx: 0, results: {} };
       renderRun(el);
     });
+    const sr = el.querySelector('#startReal');
+    if (sr) sr.onclick = () => {
+      if (!App.confirmBox('真题全卷共 130 分钟（写作30 → 听力25 → 阅读40 → 翻译30），到时自动切区，中途退出不计成绩。确定开始吗？')) return;
+      run = { mode: 'real', secIdx: 0, results: {} };
+      renderRealRun(el);
+    };
+  }
+
+  /* ===== 真题全卷运行 ===== */
+  function renderRealRun(el) {
+    if (run.secIdx >= App.Mock.REAL_SECS.length) return renderRealReport(el);
+    const sec = App.Mock.REAL_SECS[run.secIdx];
+    el.innerHTML = `
+      <div class="card">
+        <div class="steps">${App.Mock.REAL_SECS.map((s, i) => '<span class="step ' + (i < run.secIdx ? 'done' : i === run.secIdx ? 'cur' : '') + '">' + s.short + ' ' + s.min + '′</span>').join('')}</div>
+        <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap">
+          <b>${sec.name}</b>
+          <span class="note">${sec.group || '真卷流程'} · 限时 ${sec.min} 分钟，到时自动提交</span>
+          <span class="timer cool" style="margin-left:auto" id="secTimer">--:--</span>
+          <button class="btn danger sm" id="abort">中止考试</button>
+        </div>
+      </div>
+      <div id="secBody"></div>`;
+    el.querySelector('#abort').onclick = () => {
+      if (App.confirmBox('中止后本次真题全卷成绩将作废，确定？')) { run = null; V.render(el); }
+    };
+    const body = el.querySelector('#secBody');
+    const timeLimit = sec.min * 60;
+    let left = timeLimit;
+    const tEl = el.querySelector('#secTimer');
+    tEl.textContent = App.mmss(left);
+    const tick = setInterval(() => { left--; if (tEl.isConnected) tEl.textContent = App.mmss(left); }, 1000);
+    let autoTimer = null;
+    const exam = App.store.profile.exam || 'cet6';
+    const goNext = (result) => {
+      clearInterval(tick);
+      clearInterval(autoTimer);
+      run.results[sec.key] = result;
+      run.secIdx++;
+      App.toast('「' + sec.short + '」已提交');
+      renderRealRun(el);
+    };
+    let forceSubmit = null;
+    if (sec.key === 'writing') {
+      renderWritingSec(body, { essay: 'w1' }, goNext, f => forceSubmit = f);
+    } else if (sec.key === 'listening') {
+      const setIds = App.Mock.REAL_LISTENING_SETS[exam];
+      const h = App.Listening.renderMock(body, goNext, { setIds });
+      forceSubmit = h.forceSubmit;
+    } else if (sec.key === 'rcloze' || sec.key === 'rmatch' || sec.key === 'rcareful') {
+      const map = { rcloze: 'cloze', rmatch: 'matching', rcareful: 'careful' };
+      App.Reading['render_' + map[sec.key]](body, App.Mock.REAL_READING_SETS[map[sec.key]], { timeLimit, onSubmit: goNext }, () => {});
+      clearInterval(tick);
+      tEl.style.display = 'none';
+    } else if (sec.key === 'trans') {
+      renderTransSec(body, { trans: exam === 'cet4' ? 't1' : 't7' }, goNext, f => forceSubmit = f);
+    }
+    // 到时自动提交（阅读三区由渲染器自带计时接管）
+    if (sec.key === 'writing' || sec.key === 'listening' || sec.key === 'trans') {
+      autoTimer = setInterval(() => {
+        if (run == null) { clearInterval(autoTimer); return; }
+        if (left > 0) return;
+        clearInterval(autoTimer);
+        App.toast('⏰ 「' + sec.short + '」时间到，自动提交');
+        if (forceSubmit) forceSubmit();
+      }, 1000);
+    }
+  }
+
+  function renderRealReport(el) {
+    const r = run.results;
+    const s = App.Mock.scoreReal(r);
+    const rec = { date: App.today(), setId: 'REAL', mode: 'real', parts: { writing: s.writing, listening: s.listening, reading: s.reading, translation: s.translation }, total: s.total };
+    App.store.mocks.push(rec);
+    if (r.writing && r.writing.text) {
+      App.store.essays.push({ date: App.today() + '（真题卷）', topicId: 'w1', cat: '真题全卷', text: r.writing.text, score: r.writing.score, items: 0 });
+    }
+    App.save();
+    el.innerHTML = `<div class="card" style="max-width:700px;margin:20px auto;text-align:center;padding:34px">
+      <div style="font-size:46px">🏛</div>
+      <h2>真题全卷完成！</h2>
+      <div style="font-size:42px;font-weight:800;color:var(--pri);margin:8px 0">预估总分 ${s.total}<span style="font-size:16px;color:var(--ink3)"> / 710</span></div>
+      <div class="grid4" style="grid-template-columns:repeat(4,1fr);text-align:left;margin:14px 0">
+        <div class="stat-card"><div class="num" style="font-size:19px">${s.writing}<small>/106.5</small></div><div class="lab">写作</div></div>
+        <div class="stat-card"><div class="num" style="font-size:19px">${s.listening}<small>/248.5</small></div><div class="lab">听力</div></div>
+        <div class="stat-card"><div class="num" style="font-size:19px">${s.reading}<small>/248.5</small></div><div class="lab">阅读</div></div>
+        <div class="stat-card"><div class="num" style="font-size:19px">${s.translation}<small>/106.5</small></div><div class="lab">翻译</div></div>
+      </div>
+      <div class="note" style="margin-bottom:14px">分值说明：写作 15% · 听力 35% · 阅读 35% · 翻译 15%（710 分制，与真卷一致）。听力和阅读的正确率详见各分区解析。</div>
+      <button class="btn big" id="backMock">返回模考中心</button>
+    </div>`;
+    el.querySelector('#backMock').onclick = () => { run = null; V.render(el); };
   };
 
   function renderRun(el) {
