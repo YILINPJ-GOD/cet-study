@@ -127,16 +127,18 @@ App.Gen = {};
 
   /* ---------- 选词填空生成 ---------- */
   const CLOZE_FRAMES = [
-    { s: "Experts {b} that the trend will continue for years.", pos: 'v', cue: "主语为复数名词且缺谓语动词，与 that 从句搭配" },
-    { s: "This {b} change has drawn wide public attention.", pos: 'adj', cue: "冠词与名词之间需要形容词作定语" },
-    { s: "The {b} of new technology is hard to ignore.", pos: 'n', cue: "定冠词 the 后需要名词，与 of 短语搭配" },
-    { s: "People are adapting to the new situation {b}.", pos: 'adv', cue: "修饰整个句子的成分需要副词" },
-    { s: "Local governments have begun to {b} practical measures.", pos: 'v', cue: "to 不定式后需要动词原形" },
-    { s: "The results seem {b} to most researchers.", pos: 'adj', cue: "seem 后需要形容词作表语" },
-    { s: "Public interest in the {b} keeps growing.", pos: 'n', cue: "定冠词 the 后需要名词" },
-    { s: "Many families now {b} this new habit in daily life.", pos: 'v', cue: "主语后缺谓语动词原形" },
-    { s: "The change is developing at an {b} speed.", pos: 'adj', cue: "an 提示后面以元音开头的形容词" },
-    { s: "Officials responded {b} to the public's concerns.", pos: 'adv', cue: "修饰动词 responded 需要副词" }
+    { s: "Whether such policies can {b} the inequalities they inherit remains sharply contested among researchers.", pos: 'v', cue: "whether 主语从句后缺谓语动词原形，与 inequalities 搭配" },
+    { s: "What looks like a purely {b} shift often carries consequences that reach far beyond its original context.", pos: 'adj', cue: "纯修饰语位置需要形容词，与 shift 搭配" },
+    { s: "Underlying the debate is a deeper {b}: who bears the cost when circumstances change?", pos: 'n', cue: "形容词 deeper 后需要名词，冒号后为解释" },
+    { s: "Officials responded to the evidence {b}, adjusting their targets only after the damage had been done.", pos: 'adv', cue: "修饰 responded 需要副词，与 after 从句语义呼应" },
+    { s: "The committee has urged ministers to {b} rules that were drafted for conditions that no longer exist.", pos: 'v', cue: "不定式 to 后缺动词原形，与 rules 搭配" },
+    { s: "What appears {b} in theory frequently proves far harder to deliver in practice.", pos: 'adj', cue: "系动词 appears 后需要形容词作表语" },
+    { s: "Behind the statistics lies a {b} question: whether the gains are shared fairly across generations.", pos: 'adj', cue: "名词 question 前需要形容词作定语" },
+    { s: "Several cities have tried to {b} the model, only to discover that copying a policy is easier than copying its conditions.", pos: 'v', cue: "不定式 to 后缺动词原形，与 only to 发现搭配" },
+    { s: "The pace at which such arrangements are being {b} has caught many observers off guard.", pos: 'v', cue: "被动语态 be + 过去分词，与 arrangements 搭配" },
+    { s: "Critics concede the ambition is admirable, yet question whether the {b} justifies the expense.", pos: 'n', cue: "定冠词 the 后需要名词，与 expense 并列对照" },
+    { s: "The evidence, though still fragmentary, {b} that early intervention matters more than later correction.", pos: 'v', cue: "主语 evidence 为单数，缺谓语动词，与 that 从句搭配" },
+    { s: "Few institutions are willing to {b} practices that have long defined their public identity.", pos: 'v', cue: "不定式 to 后缺动词原形，与 practices 搭配" }
   ];
 
   App.Gen.makeCloze = function (themeKey, opts) {

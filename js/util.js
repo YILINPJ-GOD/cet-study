@@ -1,6 +1,6 @@
 /* ===== 工具层：全局对象、通用函数、词库装配 ===== */
 const App = window.App = {};
-App.VERSION = '1.7.0';
+App.VERSION = '1.8.0';
 
 /* ---------- 日期与格式 ---------- */
 App.today = function (d) {
