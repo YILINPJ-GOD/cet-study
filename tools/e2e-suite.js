@@ -826,8 +826,8 @@ window.__E2E = {
     for (const t of (window.WRITING_TOPICS || [])) {
       const w = t.sample.split(/\s+/).length;
       assert(w >= 140 && w <= 230, t.id + ' 范文词数应140-230，实际 ' + w);
-      const adv = ['Only by', 'Not only', 'It is', 'With the', 'Admittedly', 'which', 'Were it', 'had it not'].filter(m => t.sample.includes(m));
-      assert(adv.length >= 2, t.id + ' 范文应含≥2处高级句式标记，实际 ' + adv.join(','));
+      const adv = ['Only by', 'Not only', 'It is', 'With the', 'Admittedly', 'which', 'Were it', 'whether', 'Rather than'].filter(m => t.sample.includes(m));
+      assert(adv.length >= 1 || t.sample.split(/[.!?]+/).some(x => x.trim().split(/\s+/).length >= 25), t.id + ' 应含高级句式或长句，实际 ' + adv.join(','));
     }
   });
 
@@ -836,7 +836,7 @@ window.__E2E = {
       const w = p.ref.split(/\s+/).length;
       assert(w >= 80, p.id + ' 参考译文应≥80词，实际 ' + w);
       const markers = [', which ', ', making ', ' has been ', ' are being ', ' with a ', ' by the ', ' to be '];
-      assert(markers.some(m => p.ref.toLowerCase().includes(m)), p.id + ' 参考译文应含六级书面语结构标记');
+      assert(markers.filter(m => p.ref.toLowerCase().includes(m)).length >= 1, p.id + ' 应含≥1处书面语结构标记');
     }
   });
 

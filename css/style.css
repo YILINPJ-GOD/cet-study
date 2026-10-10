@@ -145,6 +145,9 @@ select.selct{border:1.5px solid var(--line);border-radius:9px;padding:6px 10px;b
 /* 听力定位句高亮 */
 .sent-row.loc-hi{background:#fff8e1;box-shadow:inset 3px 0 0 #d97706}
 .sent-row.loc-hi .sent-en{font-weight:600}
+/* 回忆式自评按钮 */
+#selfRate button { transition: all .15s }
+#selfRate button:hover { transform: translateY(-2px); box-shadow: 0 4px 12px rgba(0,0,0,.12) }
 /* 其他 */
 .empty{text-align:center;color:var(--ink3);padding:36px 10px;font-size:14px}
 .empty .big{font-size:40px;margin-bottom:8px}

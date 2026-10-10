@@ -94,61 +94,95 @@ App.Views.vocab = App.Views.vocab || {};
       box.querySelector('#easy').onclick = () => { App.srsReview(e.w, true); App.recordVocab(true, true); next(el); };
       box.querySelector('#hard').onclick = () => { App.srsReview(e.w, false); App.recordVocab(true, false); App.dict.addToBook(e.w, '新词-难记'); next(el); };
       } else {
-      // 复习考查
-      if (!item.quiz) item.quiz = App.quizFor(e);
-      const q = item.quiz;
-      let inner;
-      if (q.mode === 'e2c') {
-        inner = `<div class="flashcard" style="cursor:default"><div class="fw">${q.word} <button class="ico-btn" id="spk">🔊</button></div><div class="hint">看词选义：选择正确释义</div></div>` +
-          q.opts.map((o, i) => `<div class="opt" data-i="${i}"><span class="k">${'ABCD'[i]}</span><span>${App.esc(o.text)}</span></div>`).join('');
-      } else if (q.mode === 'c2e') {
-        inner = `<div class="flashcard" style="cursor:default"><div class="fg">${App.esc(e.gloss)}</div><div class="hint">中英互译：选择对应的英文单词</div></div>` +
-          q.opts.map((o, i) => `<div class="opt" data-i="${i}"><span class="k">${'ABCD'[i]}</span><span style="font-weight:700">${App.esc(o.text)}</span></div>`).join('');
-      } else if (q.mode === 'listen') {
-        inner = `<div class="flashcard" style="cursor:default"><button class="btn ghost big" id="spk" style="font-size:22px">🔊 点击听音</button><div class="hint">听音辨词：选出发音对应的单词</div></div>` +
-          q.opts.map((o, i) => `<div class="opt" data-i="${i}"><span class="k">${'ABCD'[i]}</span><span style="font-weight:700">${App.esc(o.text)}</span></div>`).join('');
-      } else {
-        const isC2ET = q.mode === 'c2et';
-        inner = `<div class="flashcard" style="cursor:default"><div class="fg">${App.esc(e.gloss)}</div><div class="fi">${e.pos || ''}</div>${isC2ET ? '' : `<div class="fi">提示：${q.hint}（共 ${e.w.length} 个字母）</div>`}<div class="hint">${isC2ET ? '中英互译：默写出这个单词' : '拼写默写：输入这个单词'}</div></div>
-          <input class="txt" id="spellInput" style="text-align:center;font-size:20px;letter-spacing:2px" placeholder="输入拼写后回车" autocomplete="off">`;
-      }
-      box.innerHTML = inner;
-      const spk = box.querySelector('#spk'); if (spk) spk.onclick = () => App.speak(q.word);
-      const answer = (ok, showCorrect) => {
-        App.srsReview(q.word, ok);
-        App.recordVocab(false, ok);
-        if (ok) s.ok++;
-        if (!ok) { // 错词拉回队尾再来一次
-          s.queue.push({ entry: e, isNew: false });
+      // ===== 复习：回忆式（看词→自评→翻面→确认）=====
+      App.speak(e.w);   // 自动朗读
+      const ex = window.EXAMPLES && window.EXAMPLES[e.w];
+      const exHtml = ex ? `<div class="fe" style="margin-top:12px;font-style:italic">${App.esc(ex[0])}<br>${App.esc(ex[1])}</div>` : '';
+      box.innerHTML = `
+        <div class="flashcard" style="cursor:default">
+          <div class="fw">${e.w} <button class="ico-btn" id="spk">🔊</button></div>
+          <div class="fi">/${e.ipa}/ · ${e.pos}</div>
+          <div class="hint" style="margin-top:10px">回忆这个词的意思，然后自评</div>
+        </div>
+        <div style="display:flex;gap:12px;justify-content:center;margin-top:16px" id="selfRate">
+          <button class="btn" style="background:var(--ok);min-width:90px" data-r="know">😊 认识</button>
+          <button class="btn plain" style="min-width:90px;border-color:var(--warn);color:var(--warn)" data-r="fuzzy">🤔 模糊</button>
+          <button class="btn" style="background:var(--bad);min-width:90px" data-r="forget">😅 忘记</button>
+        </div>
+        <div id="revealArea" style="margin-top:14px;display:none">
+          <div style="background:var(--pri-soft);border-radius:12px;padding:14px 16px;text-align:center">
+            <div style="font-size:20px;font-weight:700;color:var(--ink)">${App.esc(e.gloss)}</div>
+            ${exHtml}
+          </div>
+          <div style="display:flex;gap:12px;justify-content:center;margin-top:12px">
+            <button class="btn" style="background:var(--ok)" id="confirmNext">✓ 下一个</button>
+            <button class="btn plain" id="confirmWrong" style="border-color:var(--bad);color:var(--bad)">✗ 我记错了</button>
+          </div>
+        </div>`;
+      box.querySelector('#spk').onclick = () => App.speak(e.w);
+      box.querySelectorAll('#selfRate [data-r]').forEach(btn => btn.onclick = () => {
+        // 翻面：显示释义 + 确认按钮
+        box.querySelector('#selfRate').style.display = 'none';
+        const reveal = box.querySelector('#revealArea');
+        reveal.style.display = 'block';
+        const rate = btn.dataset.r; // know / fuzzy / forget
+        // SRS 评分：know=正确升级，fuzzy=停留当前箱，forget=降回箱0
+        const srsOk = rate === 'know';
+        const fuzzy = rate === 'fuzzy';
+        App.srsReview(e.w, srsOk, fuzzy);
+        App.recordVocab(false, srsOk);
+        if (!srsOk) s.queue.push({ entry: e, isNew: false }); // 忘记/模糊 → 队尾重做
+        if (fuzzy) {
+          box.querySelector('#confirmNext').textContent = '↻ 再看一遍';
+          box.querySelector('#confirmWrong').textContent = '✓ 我记住了，下一个';
         }
-        if (showCorrect) {
-          box.querySelectorAll('.opt').forEach((o, i) => {
-            if (i === (q.answer != null ? q.answer : -1)) o.classList.add('right');
-            else if (o.classList.contains('sel') || o.dataset.i) { /* noop */ }
+        box.querySelector('#confirmNext').onclick = () => { if (fuzzy) { App.srsReview(e.w, true); } next(el); };
+        box.querySelector('#confirmWrong').onclick = () => { App.srsReview(e.w, false); App.recordVocab(false, false); next(el); };
+      });
+      // quiz 模式保留为可选路径（通过设置切换）
+      if (item.quiz) {
+        // ===== 备用：测验模式（5 种选择题）=====
+        const q = item.quiz;
+        let inner;
+        if (q.mode === 'e2c') {
+          inner = `<div class="flashcard" style="cursor:default"><div class="fw">${q.word} <button class="ico-btn" id="spk2">🔊</button></div><div class="hint">看词选义：选择正确释义</div></div>` +
+            q.opts.map((o, i) => `<div class="opt" data-i="${i}"><span class="k">${'ABCD'[i]}</span><span>${App.esc(o.text)}</span></div>`).join('');
+        } else if (q.mode === 'c2e') {
+          inner = `<div class="flashcard" style="cursor:default"><div class="fg">${App.esc(e.gloss)}</div><div class="hint">中英互译：选择对应的英文单词</div></div>` +
+            q.opts.map((o, i) => `<div class="opt" data-i="${i}"><span class="k">${'ABCD'[i]}</span><span style="font-weight:700">${App.esc(o.text)}</span></div>`).join('');
+        } else if (q.mode === 'listen') {
+          inner = `<div class="flashcard" style="cursor:default"><button class="btn ghost big" id="spk2" style="font-size:22px">🔊 点击听音</button><div class="hint">听音辨词：选出发音对应的单词</div></div>` +
+            q.opts.map((o, i) => `<div class="opt" data-i="${i}"><span class="k">${'ABCD'[i]}</span><span style="font-weight:700">${App.esc(o.text)}</span></div>`).join('');
+        } else {
+          const isC2ET = q.mode === 'c2et';
+          inner = `<div class="flashcard" style="cursor:default"><div class="fg">${App.esc(e.gloss)}</div><div class="fi">${e.pos || ''}</div>${isC2ET ? '' : `<div class="fi">提示：${q.hint}（共 ${e.w.length} 个字母）</div>`}<div class="hint">${isC2ET ? '中英互译：默写出这个单词' : '拼写默写：输入这个单词'}</div></div>
+            <input class="txt" id="spellInput" style="text-align:center;font-size:20px;letter-spacing:2px" placeholder="输入拼写后回车" autocomplete="off">`;
+        }
+        // 备用模式入口按钮
+        box.innerHTML = `
+          <div style="text-align:center;margin-bottom:8px"><button class="btn ghost sm" id="backSelf">← 返回回忆模式</button></div>` + inner;
+        const spk2 = box.querySelector('#spk2'); if (spk2) spk2.onclick = () => App.speak(q.word);
+        const answer2 = (ok) => {
+          App.srsReview(q.word, ok);
+          App.recordVocab(false, ok);
+          if (ok) s.ok++;
+          if (!ok) s.queue.push({ entry: e, isNew: false });
+          setTimeout(() => next(el), ok ? 350 : 900);
+        };
+        if (q.mode === 'spell') {
+          const inp = box.querySelector('#spellInput');
+          inp.focus();
+          inp.onkeydown = ev => { if (ev.key === 'Enter') { const v = inp.value.trim().toLowerCase(); if (!v) return; if (v === q.word) { inp.style.borderColor = 'var(--ok)'; answer2(true); } else { inp.style.borderColor = 'var(--bad)'; inp.value = q.word; App.toast('正确拼写：' + q.word); answer2(false); } } };
+        } else {
+          box.querySelectorAll('.opt').forEach(o => o.onclick = () => {
+            const i2 = +o.dataset.i;
+            const correct = i2 === q.answer;
+            box.querySelectorAll('.opt').forEach((oo, j) => { if (j === q.answer) oo.classList.add('right'); });
+            if (!correct) o.classList.add('wrong'); else o.classList.add('right');
+            if (q.mode === 'listen' || q.mode === 'c2e') App.speak(q.word);
+            answer2(correct, false);
           });
         }
-        setTimeout(() => next(el), ok ? 350 : 900);
-      };
-      if (q.mode === 'spell') {
-        const inp = box.querySelector('#spellInput');
-        inp.focus();
-        const check = () => {
-          const v = inp.value.trim().toLowerCase();
-          if (!v) return;
-          if (v === q.word) { inp.style.borderColor = 'var(--ok)'; answer(true, false); }
-          else { inp.style.borderColor = 'var(--bad)'; inp.value = q.word; App.toast('正确拼写：' + q.word); answer(false, false); }
-        };
-        inp.onkeydown = ev => { if (ev.key === 'Enter') check(); };
-      } else {
-        box.querySelectorAll('.opt').forEach(o => o.onclick = () => {
-          const i = +o.dataset.i;
-          const correct = i === q.answer;
-          box.querySelectorAll('.opt').forEach((oo, j) => { if (j === q.answer) oo.classList.add('right'); });
-          if (!correct) o.classList.add('wrong');
-          else o.classList.add('right');
-          if (q.mode === 'listen' || q.mode === 'c2e') App.speak(q.word);
-          answer(correct, false);
-        });
       }
     }
   }

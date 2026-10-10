@@ -5,11 +5,17 @@ App.DAY = 86400000;
 App.srsGet = function (w) { return App.store.srs[w] || null; };
 
 /* 记录一次作答。ok=true 升箱，false 退回 box0 立即复习 */
-App.srsReview = function (w, ok) {
+App.srsReview = function (w, ok, fuzzy) {
   const rec = App.store.srs[w] || { b: 0, due: 0, c: 0, w: 0 };
-  if (ok) { rec.b = Math.min((rec.b || 0) + 1, 6); rec.c++; }
-  else { rec.b = 0; rec.w++; }
-  rec.due = Date.now() + (ok ? App.SRS_INTERVALS[rec.b] * App.DAY : 10 * 60 * 1000);
+  if (fuzzy) {
+    rec.due = Date.now() + 5 * 60 * 1000;
+  } else if (ok) {
+    rec.b = Math.min((rec.b || 0) + 1, 6); rec.c++;
+    rec.due = Date.now() + App.SRS_INTERVALS[rec.b] * App.DAY;
+  } else {
+    rec.b = 0; rec.w++;
+    rec.due = Date.now() + 10 * 60 * 1000;
+  }
   rec.t = Date.now();
   App.store.srs[w] = rec;
   return rec;
