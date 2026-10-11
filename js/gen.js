@@ -49,13 +49,8 @@ App.Gen = {};
     const seed = (Date.now() % 100000000) + (counter++);
     const r = rng(seed);
     const nps = shuffle(r, theme.nps);
-    const facts = shuffle(r, theme.fact).slice(0, 6);
-    const f0 = fill(facts[0].s, nps, r).text;
-    const f1 = fill(facts[1].s, nps, r).text;
-    const f2 = fill(facts[2].s, nps, r).text;
-    const f3 = fill(facts[3].s, nps, r).text;
-    const f4 = fill(facts[4].s, nps, r).text;
-    const f5 = fill(facts[5].s, nps, r).text;
+    const facts = shuffle(r, theme.fact).slice(0, 10);
+    const f = facts.map(x => fill(x.s, nps, r).text);
     const intro1 = fill(theme.intro[0], nps, r).text;
     const intro2 = fill(theme.intro[1], nps, r).text;
     const stance = fill(theme.stance, nps, r).text;
@@ -76,19 +71,21 @@ App.Gen = {};
     const sent2 = pick(r, ["Researchers describe the trend as {tw} for at least another decade.", "Officials called the progress {tw}, urging patience.", "Without support, such gains may remain {tw} for many families."]).replace('{tw}', tws[1][0]);
 
     const text = [
-      intro1 + " " + intro2 + " " + f0,
-      f1 + " " + sent1 + " " + f2 + " " + f3,
-      sent2 + " " + f4 + " " + f5 + " " + stance
-    ].join("\n\n");
+      intro1 + " " + intro2 + " " + f[0],
+      f[1] + " " + f[2] + " " + sent1,
+      f[3] + " " + f[4],
+      f[5] + " " + f[6] + " " + sent2,
+      f[7] + " " + (f[8] || "") + " " + f[9] + " " + stance
+    ].filter(s => s.trim().length > 20).join("\n\n");
 
-    // 题目：2 细节 + 2 词义 + 1 主旨
+    // 题目：2 细节 + 2 词义 + 1 主旨 = 5 题
     const qs = [];
-    [[f0, facts[0]], [f1, facts[1]]].forEach(([sen, ft]) => {
+    [[f[0], facts[0]], [f[1], facts[1]]].forEach(([sen, ft]) => {
       const npForQ = ft.q.includes('{np}') ? (sen.match(/(?:[A-Z][a-z]+ ?){1,3}/) || ['the trend'])[0] : '';
       qs.push({
         q: ft.q.replace(/\{np\}/g, npForQ || 'the change'),
         opts: shuffle(r, [ft.a, "It has no effect on ordinary people", "It disappeared after a short period", "Only large companies benefit from it"]),
-        a: 0, // 占位，下面重算
+        a: 0,
         exp: "细节题。定位句：" + sen,
         _a: ft.a
       });

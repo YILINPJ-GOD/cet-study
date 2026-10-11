@@ -19,9 +19,11 @@ culture: {
     { s:"Some worry that turning {np} into business may weaken their meaning.", q:"What worry is mentioned?", a:"Commercial use may weaken their meaning" },
     { s:"Museums now hold night tours where visitors experience {np} after dark.", q:"What do museums offer at night?", a:"Night tours to experience heritage" },
     { s:"Documentaries about {np} have won large audiences among the young.", q:"Who watches the documentaries?", a:"Large young audiences" },
-    { s:"Volunteers record the memories of masters of {np} before they are lost.", q:"Why do volunteers record masters' memories?", a:"To preserve them before they are lost" }
+    { s:"Volunteers record the memories of masters of {np} before they are lost.", q:"Why do volunteers record masters' memories?", a:"To preserve them before they are lost" },
+    { s:"Enthusiasts argue that {np} offers a sense of continuity that modern life often lacks.", q:"What does the tradition offer according to enthusiasts?", a:"A sense of continuity that modern life lacks" },
+  { s:"Digital platforms have made {np} accessible to audiences who would never visit a museum.", q:"How have digital platforms helped?", a:"Made heritage accessible to wider audiences" },
   ],
-  stance: "Tradition survives not by staying unchanged, but by finding new hands to carry it.",
+stance: "Tradition survives not by staying unchanged, but by finding new hands to carry it.",
   twPool: [["authentic","正宗的，真正的"],["delicate","精致的"],["prospering","兴旺的"],["fragile","脆弱的"],["fashionable","时髦的"]],
   sentiment: "warm and reflective"
 },
@@ -42,9 +44,11 @@ tech: {
     { s:"Universities have redesigned courses so that graduates can work alongside {np}.", q:"Why are universities redesigning courses?", a:"So graduates can work alongside the technology" },
     { s:"Small businesses say {np} lowers costs that once blocked their growth.", q:"What do small businesses say about {np}?", a:"It lowers costs that once blocked growth" },
     { s:"Engineers admit that {np} still fails at tasks requiring common sense.", q:"What limitation of {np} is mentioned?", a:"It still fails at tasks requiring common sense" },
-    { s:"Public trust in {np} rises when its decisions can be explained.", q:"When does public trust in {np} rise?", a:"When its decisions can be explained" }
+    { s:"Public trust in {np} rises when its decisions can be explained.", q:"When does public trust in {np} rise?", a:"When its decisions can be explained" },
+    { s:"Research institutions are investing heavily in understanding how {np} affects human behaviour and decision-making.", q:"What are research institutions investing in?", a:"Understanding how the technology affects behaviour" },
+  { s:"Despite early enthusiasm, the adoption of {np} has been slower in sectors that rely heavily on human judgment.", q:"Where has adoption been slower?", a:"In sectors relying on human judgment" },
   ],
-  stance: "The real question is not whether {np} will spread, but whether society is prepared to guide it.",
+stance: "The real question is not whether {np} will spread, but whether society is prepared to guide it.",
   twPool: [["sophisticated","精密的，复杂的"],["unprecedented","前所未有的"],["vulnerable","脆弱的"],["versatile","多才多艺的；多用途的"],["inevitable","不可避免的"]],
   sentiment: "balanced but cautiously optimistic"
 },
@@ -65,9 +69,11 @@ env: {
     { s:"Factory owners complain that rules on {np} raise short-term costs.", q:"What do factory owners complain about?", a:"Rules raise short-term costs" },
     { s:"Volunteers organize weekend events to promote {np} in neighborhoods.", q:"What do volunteers do?", a:"Organize weekend events to promote it" },
     { s:"Data shows that {np} grows fastest where citizens are well informed.", q:"Where does adoption grow fastest?", a:"Where citizens are well informed" },
-    { s:"Engineers are designing {np} that also survive extreme weather.", q:"What improvement are engineers making?", a:"Designing systems that survive extreme weather" }
+    { s:"Engineers are designing {np} that also survive extreme weather.", q:"What improvement are engineers making?", a:"Designing systems that survive extreme weather" },
+    { s:"International agreements on {np} have been signed but enforcement remains inconsistent across borders.", q:"What is the status of international agreements?", a:"Signed but enforcement is inconsistent" },
+  { s:"Economic analysts estimate that transitioning to {np} will create far more jobs than it eliminates.", q:"What do analysts estimate about the transition?", a:"It will create more jobs than it eliminates" },
   ],
-  stance: "Protecting the environment is no longer a slogan; it is a set of daily decisions.",
+stance: "Protecting the environment is no longer a slogan; it is a set of daily decisions.",
   twPool: [["feasible","可行的"],["sustainable","可持续的"],["detrimental","有害的"],["indispensable","必不可少的"],["radical","彻底的，激进的"]],
   sentiment: "practical and encouraging"
 },
@@ -88,9 +94,11 @@ edu: {
     { s:"Dropout rates fall when {np} offers short, clear milestones.", q:"What reduces dropout rates?", a:"Short, clear milestones" },
     { s:"Critics argue that {np} cannot replace hands-on practice.", q:"What do critics argue?", a:"It cannot replace hands-on practice" },
     { s:"Older learners report that {np} sharpens memory and confidence.", q:"What do older learners report?", a:"Better memory and confidence" },
-    { s:"Governments now count {np} in national education statistics.", q:"How has official recognition changed?", a:"Such learning is counted in national statistics" }
+    { s:"Governments now count {np} in national education statistics.", q:"How has official recognition changed?", a:"Such learning is counted in national statistics" },
+    { s:"Educational researchers have found that students retain more information when {np} is combined with hands-on practice.", q:"When do students retain more information?", a:"When learning is combined with hands-on practice" },
+  { s:"The demand for {np} has grown so fast that many institutions struggle to keep pace.", q:"What challenge do institutions face?", a:"They struggle to keep pace with demand" },
   ],
-  stance: "A society that keeps learning keeps growing; the classroom is simply wherever curiosity happens.",
+stance: "A society that keeps learning keeps growing; the classroom is simply wherever curiosity happens.",
   twPool: [["flexible","灵活的"],["accessible","易获得的"],["rigorous","严格的"],["motivating","激励人的"],["outdated","过时的"]],
   sentiment: "positive and forward-looking"
 },
@@ -111,9 +119,11 @@ health: {
     { s:"Experts warn that skipping {np} quietly raises long-term risks.", q:"What do experts warn about?", a:"Skipping the habit raises long-term risks" },
     { s:"Apps that track {np} help people stick to their plans.", q:"How do apps help?", a:"They help people stick to plans" },
     { s:"Families say shared {np} builds better communication at home.", q:"What does the habit bring to families?", a:"Better communication at home" },
-    { s:"Hospitals now prescribe {np} alongside traditional treatment.", q:"How do hospitals use the advice?", a:"They prescribe it alongside treatment" }
+    { s:"Hospitals now prescribe {np} alongside traditional treatment.", q:"How do hospitals use the advice?", a:"They prescribe it alongside treatment" },
+    { s:"Long-term studies suggest that {np} in early adulthood has lasting effects on health in later life.", q:"What do long-term studies suggest?", a:"Early habits have lasting effects on later health" },
+  { s:"Doctors who recommend {np} to their patients report higher compliance when family members are involved.", q:"What improves patient compliance?", a:"Involving family members" },
   ],
-  stance: "Health is built in ordinary moments: the walk taken, the screen put down, the light turned off.",
+stance: "Health is built in ordinary moments: the walk taken, the screen put down, the light turned off.",
   twPool: [["moderate","适度的"],["beneficial","有益的"],["excessive","过度的"],["consistent","持续的"],["harmful","有害的"]],
   sentiment: "encouraging and evidence-based"
 },
@@ -134,9 +144,11 @@ society: {
     { s:"Volunteers say {np} gives them a sense of belonging.", q:"What does volunteering give volunteers?", a:"A sense of belonging" },
     { s:"Local shops near {np} report rising sales on weekends.", q:"What happens to nearby shops?", a:"Rising sales on weekends" },
     { s:"Researchers studying {np} note both freedom and loneliness.", q:"What two things do researchers note?", a:"Both freedom and loneliness" },
-    { s:"City planners now design streets with {np} in mind.", q:"What do city planners do?", a:"Design streets with the phenomenon in mind" }
+    { s:"City planners now design streets with {np} in mind.", q:"What do city planners do?", a:"Design streets with the phenomenon in mind" },
+    { s:"Sociologists studying {np} note that its effects vary significantly across different income groups.", q:"How do the effects vary?", a:"They vary significantly across income groups" },
+  { s:"Policy makers who ignore the social dimension of {np} risk undermining public trust in government.", q:"What risks do policy makers face?", a:"Undermining public trust in government" },
   ],
-  stance: "Behind every social trend stands a simple human wish: to be seen, connected and useful.",
+stance: "Behind every social trend stands a simple human wish: to be seen, connected and useful.",
   twPool: [["profound","深刻的"],["widespread","普遍的"],["tempting","诱人的"],["temporary","暂时的"],["genuine","真诚的"]],
   sentiment: "observant and empathetic"
 }

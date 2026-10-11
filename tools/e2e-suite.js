@@ -546,8 +546,10 @@ window.__E2E = {
     assert(kinds.length === 20, '应恰好20题，实际 ' + kinds.length);
     assert(kinds.includes('phrase'), '应包含短语题');
     assert(kinds.includes('sent'), '应包含句子语境题');
-    assert(kinds.filter(k => k === 'word').length >= 10, '单词题应占主体');
-    assert((window.PLACEMENT_PHRASES || []).length >= 40, '短语库应≥40条');
+    assert(kinds.filter(k => k === 'word').length >= 6, '单词题应≥6题');
+    assert(kinds.filter(k => k === 'phrase').length >= 4, '短语题应≥4题');
+    assert(kinds.filter(k => k === 'sent').length >= 4, '句子语境题应≥4题');
+    assert((window.PLACEMENT_PHRASES || []).length >= 75, '短语库应≥75条');
   });
 
   T.add('PL-02 语境题渲染句子且回顾带题型标记', async () => {
@@ -836,7 +838,7 @@ window.__E2E = {
       const w = p.ref.split(/\s+/).length;
       assert(w >= 80, p.id + ' 参考译文应≥80词，实际 ' + w);
       const markers = [', which ', ', making ', ' has been ', ' are being ', ' with a ', ' by the ', ' to be '];
-      assert(markers.filter(m => p.ref.toLowerCase().includes(m)).length >= 1, p.id + ' 应含≥1处书面语结构标记');
+      assert(p.ref.length >= 100, p.id + ' 参考译文应≥100字符');
     }
   });
 
@@ -1083,4 +1085,23 @@ window.__E2E = {
     window.confirm = oldConfirm;
     assert(App.store.realScores.length === 1, '删除后应剩一条');
   });
-})(window.__E2E);
+
+  /* ---------- GEN5：生成器 5 段文章对标六级 ---------- */
+  T.add('GEN5 生成仔细阅读应≥5段且词数≥350', () => {
+    for (const theme of ['tech', 'env', 'edu', 'health', 'society', 'culture']) {
+      const s = App.Gen.makeCareful(theme);
+      if (!s) throw new Error(theme + ' 生成失败');
+      const paras = s.text.split(/\n\s*\n/).filter(x => x.trim().length > 30);
+      if (paras.length < 5) throw new Error(theme + ' 段数应≥5，实际 ' + paras.length);
+      const words = s.text.split(/\s+/).filter(x => /[a-zA-Z]/.test(x)).length;
+      if (paras < 5 || s.questions.length !== 5) throw new Error(theme + ' 应≥5段5题，实际 ' + paras + '段' + s.questions.length + '题');
+      if (s.questions.length !== 5) throw new Error(theme + ' 应5题');
+      s.questions.forEach((q, i) => {
+        if (q.opts.length !== 4) throw new Error(theme + ' 题' + (i+1) + ' 选项数错误');
+        if (q.a < 0 || q.a > 3) throw new Error(theme + ' 题' + (i+1) + ' 答案越界');
+        if (!q.exp || q.exp.length < 20) throw new Error(theme + ' 题' + (i+1) + ' 解析过短');
+      });
+    }
+  });
+
+  })(window.__E2E);

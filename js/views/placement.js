@@ -7,24 +7,24 @@ App.Views.placement = App.Views.placement || {};
     const words = App.allWords();
     const pick = (tier, n) => App.randPick(words.filter(w => w.tier === tier), n);
     const exam = App.store.profile.exam || 'cet6';
-    // 题型配比：12 词义 + 4 短语 + 4 句子语境 = 20 题
+    // 题型配比：8 词义 + 6 短语 + 6 句子语境 = 20 题
     const wordMix = exam === 'cet4'
-      ? [['t4c', 6], ['t4h', 4], ['t4s', 2]]
-      : [['t4c', 3], ['t4h', 2], ['t6h', 4], ['t6s', 3]];
+      ? [['t4c', 4], ['t4h', 3], ['t4s', 1]]
+      : [['t4c', 2], ['t4h', 1], ['t6h', 3], ['t6s', 2]];
     const qs = wordMix.reduce((acc, [tier, n]) => acc.concat(pick(tier, n)), []).map(entry => {
       const ds = App.glossDistractors(entry, 3);
       const opts = App.shuffle([entry].concat(ds)).map(e => e.gloss);
       return { kind: 'word', w: entry.w, gloss: entry.gloss, tier: entry.tier, opts, answer: opts.indexOf(entry.gloss) };
     });
-    // 短语题
+    // 短语题（6 题）
     const phrases = window.PLACEMENT_PHRASES || [];
-    App.shuffle(phrases).slice(0, 4).forEach(p => {
+    App.shuffle(phrases).slice(0, 6).forEach(p => {
       const ds = App.randPick(phrases.filter(x => x !== p), 3).map(x => x[1]);
       const opts = App.shuffle([p[1]].concat(ds));
       qs.push({ kind: 'phrase', w: p[0], gloss: p[1], opts, answer: opts.indexOf(p[1]) });
     });
-    // 句子语境题：从真题风格例句库取词，考"句中含义"（不足则跳过）
-    const sentWords = App.randPick(Object.keys(window.EXAMPLES || {}), 8);
+    // 句子语境题：从真题风格例句库取词，考"句中含义"（6 题）
+    const sentWords = App.randPick(Object.keys(window.EXAMPLES || {}), 12);
     sentWords.forEach(w => {
       if (qs.length >= 20) return;
       const entry = App.WMAP()[w];
