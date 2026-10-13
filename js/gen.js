@@ -190,19 +190,29 @@ App.Gen = {};
   };
 
   /* ---------- 选词填空生成 ---------- */
+  /* 20 个六级长难句框架（带 {b} 空槽与词性/解题提示），每次抽 10 个；
+     篇幅目标：6 段 500 词以上，对标六级真题语篇密度。 */
   const CLOZE_FRAMES = [
-    { s: "Whether such policies can {b} the inequalities they inherit remains sharply contested among researchers.", pos: 'v', cue: "whether 主语从句后缺谓语动词原形，与 inequalities 搭配" },
-    { s: "What looks like a purely {b} shift often carries consequences that reach far beyond its original context.", pos: 'adj', cue: "纯修饰语位置需要形容词，与 shift 搭配" },
-    { s: "Underlying the debate is a deeper {b}: who bears the cost when circumstances change?", pos: 'n', cue: "形容词 deeper 后需要名词，冒号后为解释" },
-    { s: "Officials responded to the evidence {b}, adjusting their targets only after the damage had been done.", pos: 'adv', cue: "修饰 responded 需要副词，与 after 从句语义呼应" },
-    { s: "The committee has urged ministers to {b} rules that were drafted for conditions that no longer exist.", pos: 'v', cue: "不定式 to 后缺动词原形，与 rules 搭配" },
-    { s: "What appears {b} in theory frequently proves far harder to deliver in practice.", pos: 'adj', cue: "系动词 appears 后需要形容词作表语" },
-    { s: "Behind the statistics lies a {b} question: whether the gains are shared fairly across generations.", pos: 'adj', cue: "名词 question 前需要形容词作定语" },
-    { s: "Several cities have tried to {b} the model, only to discover that copying a policy is easier than copying its conditions.", pos: 'v', cue: "不定式 to 后缺动词原形，与 only to 发现搭配" },
-    { s: "The pace at which such arrangements are being {b} has caught many observers off guard.", pos: 'v', cue: "被动语态 be + 过去分词，与 arrangements 搭配" },
-    { s: "Critics concede the ambition is admirable, yet question whether the {b} justifies the expense.", pos: 'n', cue: "定冠词 the 后需要名词，与 expense 并列对照" },
-    { s: "The evidence, though still fragmentary, {b} that early intervention matters more than later correction.", pos: 'v', cue: "主语 evidence 为单数，缺谓语动词，与 that 从句搭配" },
-    { s: "Few institutions are willing to {b} practices that have long defined their public identity.", pos: 'v', cue: "不定式 to 后缺动词原形，与 practices 搭配" }
+    { s: "Whether such policies can {b} the inequalities they inherit remains sharply contested among researchers who have watched similar promises quietly fade before.", pos: 'v', cue: "whether 主语从句后缺谓语动词原形，与 inequalities 搭配" },
+    { s: "What looks like a purely {b} shift often carries consequences that reach far beyond its original context, touching households that never asked for it.", pos: 'adj', cue: "纯修饰语位置需要形容词，与 shift 搭配" },
+    { s: "Underlying the whole debate is a deeper {b}: who bears the cost when circumstances change, and who exactly gets to decide?", pos: 'n', cue: "形容词 deeper 后需要名词，冒号后为解释" },
+    { s: "Officials responded to the evidence {b}, adjusting their targets only after the damage had been measured, photographed and widely reported.", pos: 'adv', cue: "修饰 responded 需要副词，与 after 从句语义呼应" },
+    { s: "The committee has urged ministers to {b} rules that were drafted for conditions that no longer exist in any meaningful form.", pos: 'v', cue: "不定式 to 后缺动词原形，与 rules 搭配" },
+    { s: "What appears {b} in theory frequently proves far harder to deliver in practice, where budgets, habits and elections intervene.", pos: 'adj', cue: "系动词 appears 后需要形容词作表语" },
+    { s: "Behind the statistics lies a {b} question: whether the gains are shared fairly across generations, or merely postponed for them to repay.", pos: 'adj', cue: "名词 question 前需要形容词作定语" },
+    { s: "Several cities have tried to {b} the model, only to discover that copying a policy is far easier than copying the conditions that made it work.", pos: 'v', cue: "不定式 to 后缺动词原形，与 only to 发现搭配" },
+    { s: "The pace at which such arrangements are being {b} has caught many observers off guard, including some who helped design them.", pos: 'v', cue: "被动语态 be + 过去分词，与 arrangements 搭配" },
+    { s: "Critics concede the ambition is admirable, yet question whether the {b} justifies the expense at a time of tight budgets.", pos: 'n', cue: "定冠词 the 后需要名词，与 expense 并列对照" },
+    { s: "The evidence, though still fragmentary, {b} that early intervention matters more than later correction, however expensive the former may seem.", pos: 'v', cue: "主语 evidence 为单数，缺谓语动词，与 that 从句搭配" },
+    { s: "Few institutions are willing to {b} practices that have long defined their public identity, even when those practices no longer serve it.", pos: 'v', cue: "不定式 to 后缺动词原形，与 practices 搭配" },
+    { s: "What many analysts overlook is how quickly public attitudes {b} once the costs of inaction become visible to ordinary households rather than to statisticians.", pos: 'v', cue: "复数主语 attitudes 缺谓语动词原形，与 once 从句呼应" },
+    { s: "Critics and supporters {b} on one point: the status quo cannot hold for another decade without serious reform.", pos: 'v', cue: "并列复数主语缺谓语动词，与介词 on 搭配" },
+    { s: "Whether the policy survives the next election depends less on ideology than on the measurable {b} it can show within two years.", pos: 'n', cue: "定冠词 the 后需要名词，与 measurable 及后文 show 的宾语呼应" },
+    { s: "To assume the trend will simply reverse is to misread how deeply the {b} has entered everyday decisions in ordinary families.", pos: 'n', cue: "定冠词 the 后需要名词作从句主语，谓语为单数" },
+    { s: "The transition is neither smooth nor {b}, and pretending otherwise has only delayed the honest planning that officials now acknowledge.", pos: 'adj', cue: "neither...nor 并列结构需要形容词，与 smooth 对照" },
+    { s: "Households that adopted the practice early report savings that are anything but {b}, a detail that has quietly changed the debate.", pos: 'adj', cue: "anything but 后需要形容词作表语，与 savings 呼应" },
+    { s: "The plan is ambitious in outline yet worryingly {b} in precisely the details that matter most to the people affected by it.", pos: 'adj', cue: "副词 worryingly 后需要形容词作表语，与 in the details 搭配" },
+    { s: "Officials now publish the numbers quarterly, a habit that would have been almost unthinkable a decade {b} in this sector.", pos: 'adv', cue: "a decade 后需要时间副词，与句首 now 呼应" }
   ];
 
   App.Gen.makeCloze = function (themeKey, opts) {
@@ -237,9 +247,27 @@ App.Gen = {};
       if (s.includes('the {b} of new technology')) s = s.replace('new technology', pick(r, theme.nps)[0]);
       return s;
     });
-    const intro = fill(pick(r, theme.intro), nps, r).text;
-    const stance = fill(pick(r, theme.stance), nps, r).text;
-    const text = intro + "\n\n" + sentTexts.slice(0, 5).join(" ") + "\n\n" + sentTexts.slice(5).join(" ") + " " + stance;
+    const intro1 = fill(theme.intro[0], nps, r).text;
+    const intro2 = fill(theme.intro[1] || theme.intro[0], nps, r).text;
+    const stance = fill(theme.stance, nps, r).text;
+    /* 填充句用满主题事实句池（8 条长句 + 10 条短句，均无空格），支撑六段 500 词以上的六级语篇密度 */
+    const wc2 = s => (s.match(/\S+/g) || []).length;
+    const allFacts = shuffle(r, theme.fact || []);
+    const longs = allFacts.filter(x => wc2(x.s) >= 22).map(x => fill(x.s, nps, r).text);
+    const shorts = allFacts.filter(x => wc2(x.s) < 22).map(x => fill(x.s, nps, r).text);
+    while (longs.length < 8) longs.push(fill(pick(r, allFacts).s, nps, r).text);
+    while (shorts.length < 10) shorts.push(fill(pick(r, allFacts).s, nps, r).text);
+    const L = i => longs[i % longs.length];
+    const S = i => shorts[i % shorts.length];
+    /* 六段装配：空格分布 2/2/2/2/1/1，段段有事实句铺垫，全文约 550-650 词 */
+    const text = [
+      intro1 + " " + intro2 + " " + S(0) + " " + sentTexts[0] + " " + S(1) + " " + sentTexts[1],
+      L(0) + " " + sentTexts[2] + " " + S(2) + " " + L(1) + " " + sentTexts[3],
+      S(3) + " " + sentTexts[4] + " " + L(2) + " " + sentTexts[5] + " " + S(4),
+      L(3) + " " + sentTexts[6] + " " + S(5) + " " + L(4) + " " + sentTexts[7],
+      L(5) + " " + sentTexts[8] + " " + S(6) + " " + L(6),
+      L(7) + " " + S(7) + " " + sentTexts[9] + " " + S(8) + " " + S(9) + " " + stance
+    ].join("\n\n");
 
     // 15 选项 = 10 答案 + 5 干扰（不同词性的库内词）
     const distractors = shuffle(r, bank.filter(w => !usedWords.has(w.w) && w.gloss && w.gloss.length <= 12)).slice(0, 5);
@@ -259,21 +287,31 @@ App.Gen = {};
      ④ 总量超过 60 篇时自动裁剪最旧的已做题。 */
   App.Gen.MIN_STOCK = 6;
   App.Gen.GEN_CAP = 60;
-  /* 六级篇幅标准：<5 段或 <350 词的仔细阅读视为旧版薄文章（生成器 v1.8.2 前的产物） */
+  /* 六级篇幅标准：<5 段或 <350 词的仔细阅读、<500 词的选词填空，均视为旧版薄文章（升级前生成器的产物） */
   function meetsCarefulStandard(set) {
     if (!set || typeof set.text !== 'string') return false;
     const paras = set.text.split(/\n\s*\n/).filter(x => x.trim().length > 30).length;
     const words = set.text.split(/\s+/).filter(x => /[a-zA-Z]/.test(x)).length;
     return paras >= 5 && words >= 350;
   }
+  function meetsClozeStandard(set) {
+    if (!set || typeof set.text !== 'string') return false;
+    const words = set.text.replace(/\{\d+\}/g, ' X ').split(/\s+/).filter(x => /[a-zA-Z]/.test(x)).length;
+    return words >= 500;
+  }
   App.Gen.autoSupply = function (nowMs) {
     const today = App.today(new Date(nowMs || Date.now()));
     const st = App.store;
     if (!Array.isArray(st.genBank)) st.genBank = [];
-    // 本地题库中旧版生成的仔细阅读（三段/五段薄文章）自动淘汰，由下方补给逻辑按新标准重建。
-    // 仅针对生成器产物（set.gen 标记），不影响其他来源的题源数据。
+    // 本地题库中旧版生成的薄文章（仔细阅读 <5段/<350词、选词填空 <500词）自动淘汰，
+    // 由下方补给逻辑按新标准重建。仅针对生成器产物（set.gen 标记），不影响其他来源的题源数据。
     const before = st.genBank.length;
-    st.genBank = st.genBank.filter(g => g.type !== 'careful' || !(g.set && g.set.gen) || meetsCarefulStandard(g.set));
+    st.genBank = st.genBank.filter(g => {
+      if (!g.set || !g.set.gen) return true;
+      if (g.type === 'careful') return meetsCarefulStandard(g.set);
+      if (g.type === 'cloze') return meetsClozeStandard(g.set);
+      return true;
+    });
     const removedLegacy = before - st.genBank.length;
     const seenIds = new Set((st.practice.reading || []).filter(r => String(r.id || '').indexOf('gen-') === 0).map(r => r.id));
     const isFresh = g => !seenIds.has(g.set.id);

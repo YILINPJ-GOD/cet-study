@@ -90,7 +90,7 @@ App.Reading = {}; // 模考复用的题型渲染器
         <button class="btn" id="genBtn">✨ 生成新题</button>
         <span class="badge ok" id="genStock">🤖 题源库 ${genTotal} 篇${supplyNew > 0 ? ' · 今日已自动补充 ' + supplyNew + ' 篇' : ''}</span>
       </div>
-      <div class="note" style="margin-top:8px">生成器按主题模板即时组装全新文章与题目（仔细阅读 <b>7 段约 400-450 词</b>对标真题篇幅；长篇阅读 <b>9 段 + 5 句信息匹配</b>；选词填空自动配 15 选项与逐空解析），每次生成的文章都不同；练习成绩照常计入趋势。<b>每天打开应用会自动补充新题</b>，做完题库也不会枯竭。</div>
+      <div class="note" style="margin-top:8px">生成器按主题模板即时组装全新文章与题目（仔细阅读 <b>7 段约 400-450 词</b>对标真题篇幅；长篇阅读 <b>9 段 + 5 句信息匹配</b>约 500-560 词；选词填空为 <b>6 段 500 词以上</b>的高密度连续语篇 + 15 选 10 与逐空解析），每次生成的文章都不同；练习成绩照常计入趋势。<b>每天打开应用会自动补充新题</b>，做完题库也不会枯竭。</div>
     </div>` +
     `<div class="card"><h3>💡 练法建议</h3><div class="note">每个题型单独训练手感和节奏：仔细阅读限时 <b>9 分钟/篇</b>，长篇阅读 <b>7 分钟/篇</b>，选词填空 <b>6 分钟/篇</b>（正式考试阅读部分共 40 分钟）。做题时<b>点击文章中的任何单词</b>即可查释义并加入生词本。</div></div>`;
     el.querySelectorAll('[data-type]').forEach(c => c.onclick = () => V.render(el, { type: c.dataset.type }));

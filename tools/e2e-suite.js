@@ -1132,26 +1132,39 @@ window.__E2E = {
     }
   });
 
-  T.add('GEN7 旧版生成的仔细阅读题源自动淘汰并按新标准重建', () => {
+  T.add('GEN7 旧版生成的题源（仔细阅读/选词填空）自动淘汰并按新标准重建', () => {
     App.store.profile.placed = true;
     App.store.profile.exam = 'cet6';
-    // 注入一篇旧版薄文章（3 段、远低于 350 词，模拟历史遗留题源，带生成器产物标记 gen:true）
+    // 注入旧版薄文章：仔细阅读（3 段、<350 词）与选词填空（<500 词），模拟历史遗留题源（带 gen:true 标记）
     App.store.genBank.push({
       id: 'gen-c-legacy1', type: 'careful', theme: 'tech', date: App.today(),
       set: { id: 'gen-c-legacy1', gen: true, theme: 'tech', title: 'Legacy Passage（智能生成 · 科技与人工智能）', text: 'Old thin paragraph one about technology.\n\nOld thin paragraph two about machines.\n\nOld thin paragraph three about work.', questions: [] }
     });
+    App.store.genBank.push({
+      id: 'gen-k-legacy1', type: 'cloze', theme: 'tech', date: App.today(),
+      set: { id: 'gen-k-legacy1', gen: true, theme: 'tech', title: 'Legacy Cloze（智能生成 · 15选10）', text: 'Old thin cloze passage with a few {1} blanks and {2} blanks spread across short sentences.\n\nAnother short block here with {3} a blank.', options: ['a', 'b', 'c'], a: [0, 1, 2], exp: [] }
+    });
     App.Gen.autoSupply();
+    // 仔细阅读：旧文章被淘汰、按 ≥5段/≥350词 重建
     const left = App.Gen.bankFor('careful');
-    assert(left.every(g => g.set.id !== 'gen-c-legacy1'), '旧版薄文章应被自动淘汰');
-    assert(left.length >= 2, '淘汰后库存应自动补齐至 2 篇，实际 ' + left.length);
+    assert(left.every(g => g.set.id !== 'gen-c-legacy1'), '旧版仔细阅读薄文章应被自动淘汰');
+    assert(left.length >= 2, '淘汰后仔细阅读库存应自动补齐，实际 ' + left.length);
     left.forEach(g => {
       const paras = g.set.text.split(/\n\s*\n/).filter(x => x.trim().length > 30).length;
       const words = g.set.text.split(/\s+/).filter(x => /[a-zA-Z]/.test(x)).length;
       if (paras < 5) throw new Error(g.set.id + ' 重建后应≥5段，实际 ' + paras);
       if (words < 350) throw new Error(g.set.id + ' 重建后应≥350词，实际 ' + words);
     });
-    // 选词填空题源不受影响
-    assert(App.Gen.bankFor('cloze').length >= 1, '选词填空题源应保留');
+    // 选词填空：旧短文被淘汰、按 ≥500词 重建
+    const leftCloze = App.Gen.bankFor('cloze');
+    assert(leftCloze.every(g => g.set.id !== 'gen-k-legacy1'), '旧版选词填空短文应被自动淘汰');
+    assert(leftCloze.length >= App.Gen.MIN_STOCK, '淘汰后选词填空库存应自动补齐，实际 ' + leftCloze.length);
+    const words2 = s => s.replace(/\{\d+\}/g, ' X ').split(/\s+/).filter(x => /[a-zA-Z]/.test(x)).length;
+    leftCloze.forEach(g => {
+      const w = words2(g.set.text);
+      if (w < 500) throw new Error(g.set.id + ' 重建后应≥500词，实际 ' + w);
+      if (g.set.options.length !== 15) throw new Error(g.set.id + ' 重建后选项应15个');
+    });
   });
 
   T.add('GEN8 智能生成题源库存保持每类≥6篇且覆盖全部主题', () => {
@@ -1224,6 +1237,34 @@ window.__E2E = {
     if (!$('#view .passage')) throw new Error('点击生成题应进入长篇练习');
     const sels = document.querySelectorAll('#view select');
     if (sels.length < 5) throw new Error('应渲染段落选择框，实际 ' + sels.length);
+  });
+
+  T.add('GEN10 选词填空生成：六段语篇500词以上，对标六级语篇密度', () => {
+    const words = s => s.split(/\s+/).filter(x => /[a-zA-Z]/.test(x)).length;
+    const statics = window.READING_CLOZE || [];
+    assert(statics.length >= 3, '静态选词填空题库应存在');
+    const staticMin = Math.min(...statics.map(s => words(s.text.replace(/\(\d+\)____/g, ' X '))));
+    assert(staticMin >= 220, '基准：静态选词填空应≥220词，实际 ' + staticMin);
+    for (const theme of ['tech', 'env', 'edu', 'health', 'society', 'culture']) {
+      for (let round = 0; round < 2; round++) {
+        const s = App.Gen.makeCloze(theme, { level: 'cet6' });
+        if (!s) throw new Error(theme + ' 生成失败');
+        const paras = s.text.split(/\n\s*\n/).filter(x => x.trim().length > 20);
+        if (paras.length < 5) throw new Error(theme + ' 应为≥5段连续语篇，实际 ' + paras.length + ' 段');
+        const total = words(s.text.replace(/\{\d+\}/g, ' X '));
+        if (total < 550) throw new Error(theme + ' 全文应≥550词（用户要求500词以上，实测最低595），实际 ' + total);
+        if (total > 800) throw new Error(theme + ' 篇幅异常偏长：' + total);
+        const withBlanks = paras.filter(p => /\{\d+\}/.test(p)).length;
+        if (withBlanks < 5) throw new Error(theme + ' 10个空应分布≥5段，实际 ' + withBlanks + ' 段');
+        const paraWs = paras.map(p => words(p.replace(/\{\d+\}/g, ' X ')));
+        if (Math.min.apply(null, paraWs) < 55) throw new Error(theme + ' 段落过薄：最薄 ' + Math.min.apply(null, paraWs) + ' 词');
+        if (/\{b\}|undefined|\{np\}/.test(s.text)) throw new Error(theme + ' 残留未填充模板占位符');
+        if (s.options.length !== 15 || new Set(s.options).size !== 15) throw new Error(theme + ' 选项应15个且唯一');
+        if (s.a.length !== 10 || new Set(s.a).size !== 10) throw new Error(theme + ' 应10空且答案下标唯一');
+        if (s.a.some(x => x < 0 || x >= 15)) throw new Error(theme + ' 答案下标越界');
+        s.exp.forEach((e, i) => { if (!e || e.length < 20) throw new Error(theme + ' 第' + (i+1) + '空解析过短'); });
+      }
+    }
   });
 
   })(window.__E2E);
