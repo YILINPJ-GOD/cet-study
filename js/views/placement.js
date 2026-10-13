@@ -7,24 +7,24 @@ App.Views.placement = App.Views.placement || {};
     const words = App.allWords();
     const pick = (tier, n) => App.randPick(words.filter(w => w.tier === tier), n);
     const exam = App.store.profile.exam || 'cet6';
-    // 题型配比：8 词义 + 6 短语 + 6 句子语境 = 20 题
+    // 题型配比：6 词义 + 7 短语 + 7 句子语境 = 20 题
     const wordMix = exam === 'cet4'
-      ? [['t4c', 4], ['t4h', 3], ['t4s', 1]]
-      : [['t4c', 2], ['t4h', 1], ['t6h', 3], ['t6s', 2]];
+      ? [['t4c', 3], ['t4h', 2], ['t4s', 1]]
+      : [['t4c', 1], ['t4h', 1], ['t6h', 3], ['t6s', 1]];
     const qs = wordMix.reduce((acc, [tier, n]) => acc.concat(pick(tier, n)), []).map(entry => {
       const ds = App.glossDistractors(entry, 3);
       const opts = App.shuffle([entry].concat(ds)).map(e => e.gloss);
       return { kind: 'word', w: entry.w, gloss: entry.gloss, tier: entry.tier, opts, answer: opts.indexOf(entry.gloss) };
     });
-    // 短语题（6 题）
+    // 短语题（7 题，题库 160+ 条四六级高频短语）
     const phrases = window.PLACEMENT_PHRASES || [];
-    App.shuffle(phrases).slice(0, 6).forEach(p => {
+    App.shuffle(phrases).slice(0, 7).forEach(p => {
       const ds = App.randPick(phrases.filter(x => x !== p), 3).map(x => x[1]);
       const opts = App.shuffle([p[1]].concat(ds));
       qs.push({ kind: 'phrase', w: p[0], gloss: p[1], opts, answer: opts.indexOf(p[1]) });
     });
-    // 句子语境题：从真题风格例句库取词，考"句中含义"（6 题）
-    const sentWords = App.randPick(Object.keys(window.EXAMPLES || {}), 12);
+    // 句子语境题：从真题风格例句库取词，考"句中含义"（7 题）
+    const sentWords = App.randPick(Object.keys(window.EXAMPLES || {}), 16);
     sentWords.forEach(w => {
       if (qs.length >= 20) return;
       const entry = App.WMAP()[w];
@@ -96,11 +96,11 @@ App.Views.placement = App.Views.placement || {};
       <div class="card" style="max-width:640px;margin:30px auto;text-align:center;padding:36px">
         <div style="font-size:44px">🧭</div>
         <h2 style="margin:10px 0 6px">${App.examName() ? App.examName() + '· ' : ''}入学水平测试</h2>
-        <p style="color:var(--ink2)">20 道高频词释义选择题 · 限时 5 分钟 · 选完自动跳下一题 · 到时自动交卷<br>测完为你定级，并生成专属每日背词计划；交卷后可逐词回顾对错</p>
+        <p style="color:var(--ink2)">20 道选择题（单词释义 / 短语辨析 / 句子语境选义）· 限时 5 分钟 · 选完自动跳下一题 · 到时自动交卷<br>测完为你定级，并生成专属每日背词计划；交卷后可逐词回顾对错</p>
         <div class="grid3" style="margin:18px 0;text-align:left">
-          <div class="stat-card"><div class="num" style="font-size:20px">20<small> 题</small></div><div class="lab">四选一 · 选中文释义</div></div>
+          <div class="stat-card"><div class="num" style="font-size:20px">6<small>+7</small></div><div class="lab">单词释义 + 短语辨析</div></div>
+          <div class="stat-card"><div class="num" style="font-size:20px">7<small> 题</small></div><div class="lab">真题句子·语境选义</div></div>
           <div class="stat-card"><div class="num" style="font-size:20px">5<small> 分钟</small></div><div class="lab">超时自动交卷</div></div>
-          <div class="stat-card"><div class="num" style="font-size:20px">3<small> 档</small></div><div class="lab">常用 / 高频 / 冲刺</div></div>
         </div>
         ${p.placed ? `<div class="note" style="margin-bottom:12px">当前定级：${App.lvTierLabel(p.startLevel) || App.examName()} · 每日 ${p.dailyNew} 新词（重新测试会更新计划，已背词不受影响）</div>` : ''}
         <button class="btn big" id="startBtn">开始测试</button>

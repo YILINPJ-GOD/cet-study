@@ -41,6 +41,20 @@ App.Gen = {};
     };
   }
 
+  /* 六级真题仔细阅读为 400-450 词、多段的学术说明/论说文。
+     生成器用满主题事实句模板装配 7 段：8 条六级风格长句（≥26 词）与 10 条短句
+     搭配进段，保证每段 ≥45 词、全文 ≥400 词，杜绝"两三句话算一段"的薄段落。 */
+  const DETAIL_DISTRACTORS = [
+    "It has no effect on ordinary people",
+    "It disappeared after a short period",
+    "Only large companies benefit from it",
+    "It was abandoned soon after being proposed",
+    "It mainly affects a single small group",
+    "It has been universally rejected by experts",
+    "It contradicts what earlier studies found"
+  ];
+  const LONG_MIN_WORDS = 22; // 六级长句模板均 ≥26 词，基础短模板均 ≤19 词
+
   /* ---------- 仔细阅读生成（支持个性化：难度 + 生词本植入） ---------- */
   App.Gen.makeCareful = function (themeKey, opts) {
     opts = opts || {};
@@ -49,8 +63,13 @@ App.Gen = {};
     const seed = (Date.now() % 100000000) + (counter++);
     const r = rng(seed);
     const nps = shuffle(r, theme.nps);
-    const facts = shuffle(r, theme.fact).slice(0, 10);
-    const f = facts.map(x => fill(x.s, nps, r).text);
+    const wc = s => (s.match(/\S+/g) || []).length;
+    let longs = shuffle(r, theme.fact.filter(x => wc(x.s) >= LONG_MIN_WORDS));
+    let shorts = shuffle(r, theme.fact.filter(x => wc(x.s) < LONG_MIN_WORDS));
+    while (longs.length < 8) longs = longs.concat(shuffle(r, theme.fact));
+    while (shorts.length < 10) shorts = shorts.concat(shuffle(r, theme.fact));
+    const L = i => fill(longs[i % longs.length].s, nps, r).text;
+    const S = i => fill(shorts[i % shorts.length].s, nps, r).text;
     const intro1 = fill(theme.intro[0], nps, r).text;
     const intro2 = fill(theme.intro[1], nps, r).text;
     const stance = fill(theme.stance, nps, r).text;
@@ -71,27 +90,36 @@ App.Gen = {};
     const sent2 = pick(r, ["Researchers describe the trend as {tw} for at least another decade.", "Officials called the progress {tw}, urging patience.", "Without support, such gains may remain {tw} for many families."]).replace('{tw}', tws[1][0]);
 
     const text = [
-      intro1 + " " + intro2 + " " + f[0],
-      f[1] + " " + f[2] + " " + sent1,
-      f[3] + " " + f[4],
-      f[5] + " " + f[6] + " " + sent2,
-      f[7] + " " + (f[8] || "") + " " + f[9] + " " + stance
-    ].filter(s => s.trim().length > 20).join("\n\n");
+      intro1 + " " + intro2 + " " + S(0) + " " + L(0),
+      L(1) + " " + S(1) + " " + S(2),
+      S(3) + " " + S(4) + " " + L(2) + " " + sent1,
+      L(3) + " " + S(5) + " " + S(6),
+      S(7) + " " + S(8) + " " + L(4) + " " + sent2,
+      L(5) + " " + L(6) + " " + S(9),
+      L(7) + " " + stance
+    ].filter(s => s.trim().length > 30).join("\n\n");
 
-    // 题目：2 细节 + 2 词义 + 1 主旨 = 5 题
+    // 题目：2 细节 + 2 词义 + 1 主旨 = 5 题（细节题取自前两段的长句，便于定位）
     const qs = [];
-    [[f[0], facts[0]], [f[1], facts[1]]].forEach(([sen, ft]) => {
+    [[L(0), longs[0]], [L(1), longs[1]]].forEach(([sen, ft]) => {
       const npForQ = ft.q.includes('{np}') ? (sen.match(/(?:[A-Z][a-z]+ ?){1,3}/) || ['the trend'])[0] : '';
+      const ds = shuffle(r, DETAIL_DISTRACTORS.filter(x => x !== ft.a)).slice(0, 3);
+      const opts = shuffle(r, [ft.a].concat(ds));
       qs.push({
         q: ft.q.replace(/\{np\}/g, npForQ || 'the change'),
-        opts: shuffle(r, [ft.a, "It has no effect on ordinary people", "It disappeared after a short period", "Only large companies benefit from it"]),
-        a: 0,
-        exp: "细节题。定位句：" + sen,
-        _a: ft.a
+        opts,
+        a: opts.indexOf(ft.a),
+        exp: "细节题。定位句：" + sen
       });
     });
     tws.forEach((tw, i) => {
-      const ds = shuffle(r, otherTw).slice(0, 3).map(x => x[1]);
+      // 干扰项按中文释义去重，避免不同主题词池出现同义释义导致选项重复
+      const seen = new Set([tw[1]]);
+      const ds = [];
+      for (const x of shuffle(r, otherTw)) {
+        if (!seen.has(x[1])) { seen.add(x[1]); ds.push(x[1]); }
+        if (ds.length === 3) break;
+      }
       const opts = shuffle(r, [tw[1]].concat(ds));
       qs.push({
         q: "The word \"" + tw[0] + "\" in the passage is closest in meaning to ______.",
@@ -109,15 +137,54 @@ App.Gen = {};
       opts: mainOpts, a: mainOpts.indexOf(summaries.find(x => x.k === themeKey).s),
       exp: "主旨题。全文围绕「" + theme.label + "」展开；其余选项偷换主题，文中并未论述。"
     });
-    // 重算细节题答案索引
-    qs.forEach(q => { if (q._a != null) { q.a = q.opts.indexOf(q._a); delete q._a; } });
-    qs.forEach((q, i) => { q.q = (i === qs.length - 1 ? "" : "") + q.q; });
-
     return {
       id: 'gen-c-' + seed,
       title: title + '（智能生成 · ' + theme.label + '）',
       text,
       questions: qs.slice(0, 5),
+      gen: true, theme: themeKey
+    };
+  };
+
+  /* ---------- 长篇阅读生成（9 段 + 5 句信息匹配，篇幅难度对标静态题库三篇） ---------- */
+  /* mBank 每主题 10 组"段落（3 句，含 {np} 槽位）+ 匹配句（真题式改写）+ 解析"；
+     生成时随机取 9 段标 A–I，再按散开位置抽 5 段出题，保证答案字母分布均匀。 */
+  const MATCH_PATTERNS = [
+    [0, 2, 3, 5, 7],
+    [1, 2, 4, 6, 8],
+    [0, 1, 3, 5, 8],
+    [0, 2, 4, 5, 7],
+    [1, 3, 4, 6, 7],
+    [0, 3, 4, 6, 8]
+  ];
+
+  App.Gen.makeMatching = function (themeKey, opts) {
+    opts = opts || {};
+    const theme = (window.GEN_THEMES || {})[themeKey];
+    if (!theme || !Array.isArray(theme.mBank) || theme.mBank.length < 9) return null;
+    const seed = (Date.now() % 100000000) + 9000 + (counter++);
+    const r = rng(seed);
+    const nps = shuffle(r, theme.nps);
+    const wc = s => (s.match(/\S+/g) || []).length;
+    const picks = shuffle(r, theme.mBank).slice(0, 9);
+    // 每段追加一句主题内的补充短句（取自该主题事实句池），使段落厚度对标静态题库（约 55-70 词/段）
+    let shorts = shuffle(r, (theme.fact || []).filter(x => wc(x.s) < 22));
+    while (shorts.length < picks.length) shorts = shorts.concat(shuffle(r, theme.fact || []));
+    const letters = 'ABCDEFGHI';
+    const paras = picks.map((f, i) => [
+      letters[i],
+      f.p.map(s => fill(s, nps, r).text).join(' ') + ' ' + fill(shorts[i % shorts.length].s, nps, r).text
+    ]);
+    const idxs = pick(r, MATCH_PATTERNS);
+    const items = idxs.map(i => ({
+      stmt: picks[i].stmt,
+      a: letters[i],
+      exp: "定位 " + letters[i] + " 段：" + picks[i].exp
+    }));
+    return {
+      id: 'gen-m-' + seed,
+      title: pick(r, theme.titles) + '（智能生成 · ' + theme.label + '）',
+      paras, items,
       gen: true, theme: themeKey
     };
   };
@@ -186,22 +253,34 @@ App.Gen = {};
     };
   };
   /* ---------- 题源自动补给 ----------
-     规则：① 每天首次打开自动补充 1 篇仔细阅读 + 1 篇选词填空；
-     ② 未做过的库存低于下限（各 2 篇）时自动补齐；
+     规则：① 每天首次打开自动补充 1 篇仔细阅读 + 1 篇长篇阅读 + 1 篇选词填空；
+     ② 未做过的库存低于下限（各 6 篇）时自动补齐；
      ③ 生成题持久化保存、可回看重做；已做过的不再计入库存；
      ④ 总量超过 60 篇时自动裁剪最旧的已做题。 */
-  App.Gen.MIN_STOCK = 2;
+  App.Gen.MIN_STOCK = 6;
   App.Gen.GEN_CAP = 60;
+  /* 六级篇幅标准：<5 段或 <350 词的仔细阅读视为旧版薄文章（生成器 v1.8.2 前的产物） */
+  function meetsCarefulStandard(set) {
+    if (!set || typeof set.text !== 'string') return false;
+    const paras = set.text.split(/\n\s*\n/).filter(x => x.trim().length > 30).length;
+    const words = set.text.split(/\s+/).filter(x => /[a-zA-Z]/.test(x)).length;
+    return paras >= 5 && words >= 350;
+  }
   App.Gen.autoSupply = function (nowMs) {
     const today = App.today(new Date(nowMs || Date.now()));
     const st = App.store;
     if (!Array.isArray(st.genBank)) st.genBank = [];
+    // 本地题库中旧版生成的仔细阅读（三段/五段薄文章）自动淘汰，由下方补给逻辑按新标准重建。
+    // 仅针对生成器产物（set.gen 标记），不影响其他来源的题源数据。
+    const before = st.genBank.length;
+    st.genBank = st.genBank.filter(g => g.type !== 'careful' || !(g.set && g.set.gen) || meetsCarefulStandard(g.set));
+    const removedLegacy = before - st.genBank.length;
     const seenIds = new Set((st.practice.reading || []).filter(r => String(r.id || '').indexOf('gen-') === 0).map(r => r.id));
     const isFresh = g => !seenIds.has(g.set.id);
     const newDay = st.genLastDate !== today;
     const themes = App.Gen.themes().map(t => t.key);
     let idx = st.genThemeIdx || 0;
-    const added = { careful: 0, cloze: 0, themes: [] };
+    const added = { careful: 0, matching: 0, cloze: 0, themes: [] };
 
     const addFor = (type) => {
       const fresh = () => st.genBank.filter(g => g.type === type && isFresh(g)).length;
@@ -209,7 +288,9 @@ App.Gen = {};
       let made = 0;
       for (let k = 0; k < need; k++) {
         const themeKey = themes[(idx + k) % themes.length];
-        const set = type === 'careful' ? App.Gen.makeCareful(themeKey) : App.Gen.makeCloze(themeKey);
+        const set = type === 'careful' ? App.Gen.makeCareful(themeKey)
+          : type === 'matching' ? App.Gen.makeMatching(themeKey)
+          : App.Gen.makeCloze(themeKey);
         if (!set) continue;
         st.genBank.push({ id: set.id, type, theme: themeKey, date: today, set });
         added.themes.push(themeKey);
@@ -219,6 +300,7 @@ App.Gen = {};
       return made;
     };
     added.careful = addFor('careful');
+    added.matching = addFor('matching');
     added.cloze = addFor('cloze');
     st.genThemeIdx = idx;
     st.genLastDate = today;
@@ -229,8 +311,8 @@ App.Gen = {};
       if (doneIdx >= 0) st.genBank.splice(doneIdx, 1);
       else st.genBank.shift();
     }
-    if (added.careful + added.cloze > 0) App.save();
-    return { careful: added.careful, cloze: added.cloze, newDay, stock: { careful: st.genBank.filter(g => g.type === 'careful' && isFresh(g)).length, cloze: st.genBank.filter(g => g.type === 'cloze' && isFresh(g)).length } };
+    if (added.careful + added.matching + added.cloze > 0 || removedLegacy > 0) App.save();
+    return { careful: added.careful, matching: added.matching, cloze: added.cloze, newDay, stock: { careful: st.genBank.filter(g => g.type === 'careful' && isFresh(g)).length, matching: st.genBank.filter(g => g.type === 'matching' && isFresh(g)).length, cloze: st.genBank.filter(g => g.type === 'cloze' && isFresh(g)).length } };
   };
   /* 供界面展示：某题型的生成题列表 */
   App.Gen.bankFor = function (type) {

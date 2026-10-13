@@ -56,7 +56,8 @@ App.Reading = {}; // 模考复用的题型渲染器
     if (param && param.type) return renderType(el, param.type);
     if (param && param.gen) return renderGen(el);
     const supply = App.Gen.autoSupply();
-    const genTotal = App.Gen.bankFor('careful').length + App.Gen.bankFor('cloze').length;
+    const genTotal = App.Gen.bankFor('careful').length + App.Gen.bankFor('matching').length + App.Gen.bankFor('cloze').length;
+    const supplyNew = supply.careful + supply.matching + supply.cloze;
     el.innerHTML = '<div class="grid3">' + Object.keys(TYPES).map(k => {
       const t = TYPES[k];
       const sets = DATA[k]();
@@ -75,6 +76,7 @@ App.Reading = {}; // 模考复用的题型渲染器
       <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center">
         <select class="selct" id="genType">
           <option value="careful">仔细阅读（5 题）</option>
+          <option value="matching">长篇阅读（9 段 5 题）</option>
           <option value="cloze">选词填空（15 选 10）</option>
         </select>
         <select class="selct" id="genTheme">
@@ -86,9 +88,9 @@ App.Reading = {}; // 模考复用的题型渲染器
         </select>
         <label class="note" style="display:flex;align-items:center;gap:4px;cursor:pointer"><input type="checkbox" id="genWordbook"> 结合我的生词本出题</label>
         <button class="btn" id="genBtn">✨ 生成新题</button>
-        <span class="badge ok" id="genStock">🤖 题源库 ${genTotal} 篇${supply.careful + supply.cloze > 0 ? ' · 今日已自动补充 ' + (supply.careful + supply.cloze) + ' 篇' : ''}</span>
+        <span class="badge ok" id="genStock">🤖 题源库 ${genTotal} 篇${supplyNew > 0 ? ' · 今日已自动补充 ' + supplyNew + ' 篇' : ''}</span>
       </div>
-      <div class="note" style="margin-top:8px">生成器按主题模板即时组装全新文章与题目（细节/词义/主旨全覆盖，选词填空自动配 15 选项与逐空解析），每次生成的文章都不同；练习成绩照常计入趋势。<b>每天打开应用会自动补充新题</b>，做完题库也不会枯竭。</div>
+      <div class="note" style="margin-top:8px">生成器按主题模板即时组装全新文章与题目（仔细阅读 <b>7 段约 400-450 词</b>对标真题篇幅；长篇阅读 <b>9 段 + 5 句信息匹配</b>；选词填空自动配 15 选项与逐空解析），每次生成的文章都不同；练习成绩照常计入趋势。<b>每天打开应用会自动补充新题</b>，做完题库也不会枯竭。</div>
     </div>` +
     `<div class="card"><h3>💡 练法建议</h3><div class="note">每个题型单独训练手感和节奏：仔细阅读限时 <b>9 分钟/篇</b>，长篇阅读 <b>7 分钟/篇</b>，选词填空 <b>6 分钟/篇</b>（正式考试阅读部分共 40 分钟）。做题时<b>点击文章中的任何单词</b>即可查释义并加入生词本。</div></div>`;
     el.querySelectorAll('[data-type]').forEach(c => c.onclick = () => V.render(el, { type: c.dataset.type }));
@@ -103,7 +105,9 @@ App.Reading = {}; // 模考复用的题型渲染器
         if (seedWords.length < 2) seedWords = [];
       }
       const genOpts = { level, seedWords };
-      const set = type === 'cloze' ? App.Gen.makeCloze(theme, genOpts) : App.Gen.makeCareful(theme, genOpts);
+      const set = type === 'careful' ? App.Gen.makeCareful(theme, genOpts)
+        : type === 'matching' ? App.Gen.makeMatching(theme, genOpts)
+        : App.Gen.makeCloze(theme, genOpts);
       if (!set) { App.toast('生成失败，请重试'); return; }
       App.store.genBank.push({ id: set.id, type, theme, date: App.today(), set });
       App.save();
@@ -229,7 +233,7 @@ App.Reading = {}; // 模考复用的题型渲染器
 
   /* ---------- 长篇匹配 ---------- */
   App.Reading.render_matching = function (el, id, opts, onBack) {
-    const set = (window.READING_MATCHING || []).find(s => s.id === id);
+    const set = (opts && opts.set) || (window.READING_MATCHING || []).find(s => s.id === id);
     if (!set) { el.innerHTML = '<div class="card">题库未加载</div>'; return; }
     const letters = set.paras.map(p => p[0]);
     const picks = new Array(set.items.length).fill(null);

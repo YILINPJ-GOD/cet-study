@@ -569,6 +569,39 @@ window.__E2E = {
     App.Views.placement.reset();
   });
 
+  T.add('PL-03 入学测试加重句子语境与短语比重且题库扩容', async () => {
+    assert((window.PLACEMENT_PHRASES || []).length >= 150, '短语库应≥150条，实际 ' + (window.PLACEMENT_PHRASES || []).length);
+    assert(Object.keys(window.EXAMPLES || {}).length >= 250, '例句库应≥250词，实际 ' + Object.keys(window.EXAMPLES || {}).length);
+    // 例句库所有词条必须结构完整（英文句 + 中文译）
+    for (const [w, ex] of Object.entries(window.EXAMPLES)) {
+      assert(Array.isArray(ex) && ex.length === 2 && ex[0].length >= 10 && ex[1].length >= 4, '例句 ' + w + ' 结构不完整');
+    }
+    // 第三期新增例句词条必须全部在词库中有释义（语境题可直接出题）
+    assert((window.EXAMPLES3_KEYS || []).length >= 50, '第三期例句应≥50词');
+    (window.EXAMPLES3_KEYS || []).forEach(w => {
+      const e = App.WMAP()[w];
+      assert(e && e.gloss, '新增例句词 ' + w + ' 不在词库或无释义');
+    });
+    // 可用于语境题的有效例句池（词库有释义）应充足
+    const usable = Object.keys(window.EXAMPLES).filter(w => { const e = App.WMAP()[w]; return e && e.gloss; });
+    assert(usable.length >= 230, '可用例句池应≥230词，实际 ' + usable.length);
+    await H.startPlacement('cet6');
+    const kinds = App.Views.placement.kinds();
+    assert(kinds.length === 20, '应恰好20题，实际 ' + kinds.length);
+    assert(kinds.filter(k => k === 'phrase').length >= 6, '短语题应≥6题，实际 ' + kinds.filter(k => k === 'phrase').length);
+    assert(kinds.filter(k => k === 'sent').length >= 6, '句子语境题应≥6题，实际 ' + kinds.filter(k => k === 'sent').length);
+    assert(kinds.filter(k => k === 'sent').length + kinds.filter(k => k === 'phrase').length >= 13,
+      '句子语境+短语合计应≥13题（占20题的65%）');
+    // 每题四选项且不重复、答案下标合法
+    const st = App.Views.placement.state();
+    st.qs.forEach((q, i) => {
+      assert(q.opts.length === 4, '第' + (i + 1) + '题选项数错误');
+      assert(new Set(q.opts).size === 4, '第' + (i + 1) + '题选项重复：' + q.opts.join(' | '));
+      assert(q.answer >= 0 && q.answer <= 3, '第' + (i + 1) + '题答案越界');
+    });
+    App.Views.placement.reset();
+  });
+
   T.add('SW-01 已选级别可返回重选（四级/六级）', () => {
     App.store.profile.placed = true;
     App.store.profile.exam = 'cet6';
@@ -747,6 +780,10 @@ window.__E2E = {
       const words = s.text.split(/\s+/).filter(x => /[a-zA-Z]/.test(x)).length;
       const sents = s.text.split(/[.!?]+/).filter(x => x.trim().split(/\s+/).length > 5);
       const avg = Math.round(words / Math.max(1, sents.length));
+      const paras = s.text.split(/\n+/).map(p => p.trim()).filter(Boolean);
+      const paraWords = paras.map(p => p.split(/\s+/).filter(x => /[a-zA-Z]/.test(x)).length);
+      assert(paras.length >= 5, s.id + ' 段落应≥5段，实际 ' + paras.length);
+      assert(Math.min.apply(null, paraWords) >= 50, s.id + ' 最薄段落应≥50词，实际 ' + Math.min.apply(null, paraWords));
       assert(words >= 360, s.id + ' 词数应≥360，实际 ' + words);
       assert(avg >= 18, s.id + ' 平均句长应≥18词，实际 ' + avg);
       assert(s.questions.length === 5, s.id + ' 应5题');
@@ -777,48 +814,6 @@ window.__E2E = {
     const s = App.Gen.makeCloze('tech', { level: 'cet6' });
     assert(s && s.text.length >= 500, '生成文段应足够长');
     assert(s.options.length === 15, '应15选项');
-    const text = s.text.replace(/\{\d+\}/g, 'X');
-    const markers = [' that ', ' which ', ' while ', ' when ', ' only '];
-    assert(markers.some(m => text.includes(m)), '生成文段应含从句/复杂结构标记');
-  });
-
-  T.add('RD6 仔细阅读对标真题难度', () => {
-    for (const s of (window.READING_CAREFUL || [])) {
-      const words = s.text.split(/\s+/).filter(x => /[a-zA-Z]/.test(x)).length;
-      const sents = s.text.split(/[.!?]+/).filter(x => x.trim().split(/\s+/).length > 5);
-      const avg = Math.round(words / Math.max(1, sents.length));
-      assert(words >= 360, s.id + ' 词数应≥360，实际 ' + words);
-      assert(avg >= 18, s.id + ' 平均句长应≥18词，实际 ' + avg);
-      assert(s.questions.length === 5, s.id + ' 应5题');
-      const expOk = s.questions.every(q => q.exp && q.exp.length >= 40);
-      assert(expOk, s.id + ' 每题应有详细中文解析');
-      const stems = s.questions.map(q => q.q.toLowerCase()).join(' ');
-      const hasPurposeOrInfer = /in order to|inferred|closest in meaning|suggests/.test(stems);
-      assert(hasPurposeOrInfer, s.id + ' 应含推断/词义/目的题型');
-    }
-  });
-
-  T.add('LS6 六级听力语篇密度达标', () => {
-    const sets = (window.LISTENING_CET6 || []);
-    assert(sets.length >= 6, '六级听力应≥6套');
-    for (const s of sets) {
-      assert(s.sentences.length >= 10, s.id + ' 句子应≥10，实际 ' + s.sentences.length);
-      const enTexts = s.sentences.map(x => x.en);
-      const avgW = Math.round(enTexts.reduce((a, t) => a + t.split(/\s+/).length, 0) / enTexts.length);
-      assert(avgW >= 11, s.id + ' 平均句长应≥11词，实际 ' + avgW);
-      const longWords = enTexts.join(' ').split(/\s+/).filter(w => w.length >= 10).length;
-      assert(longWords >= 8, s.id + ' 学术长词应≥8个，实际 ' + longWords);
-      const cns = s.sentences.every(x => x.cn && x.cn.length >= 4);
-      assert(cns, s.id + ' 每句应有中文译文');
-    }
-  });
-
-  T.add('GEN6 选词填空生成框架对标六级句式', () => {
-    // 触发一次生成检查产出
-    const s = App.Gen.makeCloze('tech', { level: 'cet6' });
-    assert(s && s.text.length >= 500, '生成文段应足够长');
-    assert(s.options.length === 15, '应15选项');
-    // 生成文段的句子应含从句标记（对标六级复杂句式）
     const text = s.text.replace(/\{\d+\}/g, 'X');
     const markers = [' that ', ' which ', ' while ', ' when ', ' only '];
     assert(markers.some(m => text.includes(m)), '生成文段应含从句/复杂结构标记');
@@ -860,18 +855,19 @@ window.__E2E = {
     assert(App.store.genBank.length >= before, '库存不减少');
   });
 
-  T.add('AG-02 库存低于下限自动补齐至2篇', () => {
+  T.add('AG-02 库存低于下限自动补齐至6篇', () => {
     App.store.genBank = [];
     App.store.genLastDate = App.today();   // 今天已补过，不触发每日逻辑
     // 只放 1 篇已做过的 careful（占用库存）
     const s = App.Gen.makeCareful('tech');
     App.store.genBank.push({ id: s.id, type: 'careful', theme: 'tech', date: App.today(), set: s });
     App.store.practice.reading.push({ d: Date.now(), type: 'careful', id: s.id, c: 5, t: 5 });
+    const MS = App.Gen.MIN_STOCK;
     const r = App.Gen.autoSupply();
     const freshCareful = App.Gen.bankFor('careful').filter(g => !App.store.practice.reading.some(x => x.id === g.set.id));
     const freshCloze = App.Gen.bankFor('cloze').filter(g => !App.store.practice.reading.some(x => x.id === g.set.id));
-    assert(r.cloze >= 2, '无库存的选词填空应补 2 篇');
-    assert(freshCareful.length >= 2 && freshCloze.length >= 2, '两类型新鲜库存都应≥2：' + freshCareful.length + '/' + freshCloze.length);
+    assert(r.cloze >= MS, '无库存的选词填空应补齐至下限 ' + MS + ' 篇，实际 ' + r.cloze);
+    assert(freshCareful.length >= MS && freshCloze.length >= MS, '两类型新鲜库存都应≥' + MS + '：' + freshCareful.length + '/' + freshCloze.length);
   });
 
   T.add('AG-03 生成题持久展示在题型页且可进入', () => {
@@ -896,7 +892,12 @@ window.__E2E = {
       App.store.genBank.push(g);
       if (i < 10) App.store.practice.reading.push({ d: Date.now(), type: 'careful', id, c: 5, t: 5 });
     }
+    // 伪造 65 篇：前 10 篇标记为已做（应先被裁剪），其余 55 篇未做。
+    // 本用例只测裁剪逻辑：临时将库存下限置 0，避免补给逻辑生成新题影响计数。
+    const ms = App.Gen.MIN_STOCK;
+    App.Gen.MIN_STOCK = 0;
     App.Gen.autoSupply();
+    App.Gen.MIN_STOCK = ms;
     assert(App.store.genBank.length <= App.Gen.GEN_CAP, '裁剪后应≤60，实际 ' + App.store.genBank.length);
     const fakeDone = App.store.genBank.filter(g => g.set.id.startsWith('gen-c-fake') && App.store.practice.reading.some(x => x.id === g.set.id)).length;
     const fakeFresh = App.store.genBank.filter(g => g.set.id.startsWith('gen-c-fake') && !App.store.practice.reading.some(x => x.id === g.set.id)).length;
@@ -1086,7 +1087,7 @@ window.__E2E = {
     assert(App.store.realScores.length === 1, '删除后应剩一条');
   });
 
-  /* ---------- GEN5：生成器 5 段文章对标六级 ---------- */
+  /* ---------- GEN5/GEN6B：生成器文章篇幅与厚度对标六级真题 ---------- */
   T.add('GEN5 生成仔细阅读应≥5段且词数≥350', () => {
     for (const theme of ['tech', 'env', 'edu', 'health', 'society', 'culture']) {
       const s = App.Gen.makeCareful(theme);
@@ -1094,14 +1095,135 @@ window.__E2E = {
       const paras = s.text.split(/\n\s*\n/).filter(x => x.trim().length > 30);
       if (paras.length < 5) throw new Error(theme + ' 段数应≥5，实际 ' + paras.length);
       const words = s.text.split(/\s+/).filter(x => /[a-zA-Z]/.test(x)).length;
-      if (paras < 5 || s.questions.length !== 5) throw new Error(theme + ' 应≥5段5题，实际 ' + paras + '段' + s.questions.length + '题');
-      if (s.questions.length !== 5) throw new Error(theme + ' 应5题');
+      if (words < 350) throw new Error(theme + ' 词数应≥350，实际 ' + words);
+      if (s.questions.length !== 5) throw new Error(theme + ' 应5题，实际 ' + s.questions.length);
       s.questions.forEach((q, i) => {
         if (q.opts.length !== 4) throw new Error(theme + ' 题' + (i+1) + ' 选项数错误');
         if (q.a < 0 || q.a > 3) throw new Error(theme + ' 题' + (i+1) + ' 答案越界');
         if (!q.exp || q.exp.length < 20) throw new Error(theme + ' 题' + (i+1) + ' 解析过短');
       });
     }
+  });
+
+  T.add('GEN6B 生成仔细阅读篇幅厚度对标六级真题（≥6段/≥400词/厚段落）', () => {
+    const words = s => s.split(/\s+/).filter(x => /[a-zA-Z]/.test(x)).length;
+    for (const theme of ['tech', 'env', 'edu', 'health', 'society', 'culture']) {
+      for (let round = 0; round < 3; round++) {
+        const s = App.Gen.makeCareful(theme);
+        if (!s) throw new Error(theme + ' 生成失败');
+        const paras = s.text.split(/\n\s*\n/).filter(x => x.trim().length > 30);
+        if (paras.length < 6) throw new Error(theme + ' 段数应≥6，实际 ' + paras.length);
+        const w = words(s.text);
+        if (w < 400) throw new Error(theme + ' 第' + (round+1) + '轮 词数应≥400（六级真题篇幅），实际 ' + w);
+        const paraWs = paras.map(words);
+        if (Math.min.apply(null, paraWs) < 35) throw new Error(theme + ' 最薄段落仅 ' + Math.min.apply(null, paraWs) + ' 词，不应出现一两句话的薄段落');
+        if (/\{np\}|undefined/.test(s.text)) throw new Error(theme + ' 文中残留未填充的模板占位符');
+        const sents = s.text.split(/[.!?]+/).filter(x => x.trim().split(/\s+/).length > 5);
+        const avg = w / Math.max(1, sents.length);
+        if (avg < 15) throw new Error(theme + ' 平均句长应≥15词（六级长难句），实际 ' + avg.toFixed(1));
+        const markers = [' while ', ' although ', ' whether ', ' because ', ' which ', ' that '];
+        const low = s.text.toLowerCase();
+        if (!markers.some(m => low.includes(m))) throw new Error(theme + ' 应含从句/复杂结构标记');
+        s.questions.forEach((q, i) => {
+          if (q.opts.length !== 4 || new Set(q.opts).size !== 4) throw new Error(theme + ' 题' + (i+1) + ' 选项异常');
+          if (q.a < 0 || q.a > 3) throw new Error(theme + ' 题' + (i+1) + ' 答案越界');
+        });
+      }
+    }
+  });
+
+  T.add('GEN7 旧版生成的仔细阅读题源自动淘汰并按新标准重建', () => {
+    App.store.profile.placed = true;
+    App.store.profile.exam = 'cet6';
+    // 注入一篇旧版薄文章（3 段、远低于 350 词，模拟历史遗留题源，带生成器产物标记 gen:true）
+    App.store.genBank.push({
+      id: 'gen-c-legacy1', type: 'careful', theme: 'tech', date: App.today(),
+      set: { id: 'gen-c-legacy1', gen: true, theme: 'tech', title: 'Legacy Passage（智能生成 · 科技与人工智能）', text: 'Old thin paragraph one about technology.\n\nOld thin paragraph two about machines.\n\nOld thin paragraph three about work.', questions: [] }
+    });
+    App.Gen.autoSupply();
+    const left = App.Gen.bankFor('careful');
+    assert(left.every(g => g.set.id !== 'gen-c-legacy1'), '旧版薄文章应被自动淘汰');
+    assert(left.length >= 2, '淘汰后库存应自动补齐至 2 篇，实际 ' + left.length);
+    left.forEach(g => {
+      const paras = g.set.text.split(/\n\s*\n/).filter(x => x.trim().length > 30).length;
+      const words = g.set.text.split(/\s+/).filter(x => /[a-zA-Z]/.test(x)).length;
+      if (paras < 5) throw new Error(g.set.id + ' 重建后应≥5段，实际 ' + paras);
+      if (words < 350) throw new Error(g.set.id + ' 重建后应≥350词，实际 ' + words);
+    });
+    // 选词填空题源不受影响
+    assert(App.Gen.bankFor('cloze').length >= 1, '选词填空题源应保留');
+  });
+
+  T.add('GEN8 智能生成题源库存保持每类≥6篇且覆盖全部主题', () => {
+    App.store.profile.placed = true;
+    App.store.profile.exam = 'cet6';
+    assert(App.Gen.MIN_STOCK >= 6, '库存下限应≥6，实际 ' + App.Gen.MIN_STOCK);
+    // 全新安装：清空题库后自动补给
+    App.store.genBank = [];
+    App.store.practice.reading = [];
+    App.Gen.autoSupply();
+    const careful = App.Gen.bankFor('careful');
+    const cloze = App.Gen.bankFor('cloze');
+    assert(careful.length >= 6, '仔细阅读题源应≥6篇，实际 ' + careful.length);
+    assert(cloze.length >= 6, '选词填空题源应≥6篇，实际 ' + cloze.length);
+    const themeCount = new Set(careful.map(g => g.theme)).size;
+    assert(themeCount >= 6, '仔细阅读题源应覆盖全部6个主题，实际 ' + themeCount);
+    // 每篇都符合六级篇幅标准
+    const words = s => s.split(/\s+/).filter(x => /[a-zA-Z]/.test(x)).length;
+    careful.forEach(g => {
+      const paras = g.set.text.split(/\n\s*\n/).filter(x => x.trim().length > 30).length;
+      if (paras < 5) throw new Error(g.set.id + ' 段数应≥5，实际 ' + paras);
+      if (words(g.set.text) < 350) throw new Error(g.set.id + ' 词数应≥350，实际 ' + words(g.set.text));
+    });
+    // 长篇阅读题源同样保持下限库存
+    const matching = App.Gen.bankFor('matching');
+    assert(matching.length >= App.Gen.MIN_STOCK, '长篇阅读题源应≥' + App.Gen.MIN_STOCK + '篇，实际 ' + matching.length);
+  });
+
+  T.add('GEN9 长篇阅读生成：9段5题、篇幅对标静态三篇、可练习入库', () => {
+    App.store.profile.placed = true;
+    App.store.profile.exam = 'cet6';
+    const words = s => s.split(/\s+/).filter(x => /[a-zA-Z]/.test(x)).length;
+    // 基准：静态三篇 9 段、总量 500+ 词
+    const statics = window.READING_MATCHING || [];
+    assert(statics.length >= 3, '静态长篇题库应存在');
+    const staticMin = Math.min(...statics.map(s => words(s.paras.map(p => p[1]).join(' '))));
+    assert(staticMin >= 450, '基准：静态长篇应≥450词，实际 ' + staticMin);
+    assert(App.Gen.makeMatching('nonexist') === null, '未知主题应返回 null');
+    for (const theme of ['tech', 'env', 'edu', 'health', 'society', 'culture']) {
+      for (let round = 0; round < 2; round++) {
+        const s = App.Gen.makeMatching(theme);
+        if (!s) throw new Error(theme + ' 生成失败');
+        if (s.paras.length !== 9) throw new Error(theme + ' 应9段，实际 ' + s.paras.length);
+        const letters = s.paras.map(p => p[0]);
+        if (letters.join('') !== 'ABCDEFGHI') throw new Error(theme + ' 段标应为 A–I');
+        const paraWs = s.paras.map(p => words(p[1]));
+        if (Math.min.apply(null, paraWs) < 38) throw new Error(theme + ' 段落过薄：最薄 ' + Math.min.apply(null, paraWs) + ' 词');
+        const total = words(s.paras.map(p => p[1]).join(' '));
+        if (total < 450) throw new Error(theme + ' 全文应≥450词（对标静态 ' + staticMin + ' 词），实际 ' + total);
+        if (/\{np\}|undefined/.test(s.paras.map(p => p[1]).join(' '))) throw new Error(theme + ' 段落残留模板占位符');
+        if (s.items.length !== 5) throw new Error(theme + ' 应5道匹配题，实际 ' + s.items.length);
+        s.items.forEach((it, i) => {
+          if (!letters.includes(it.a)) throw new Error(theme + ' 题' + (i+1) + ' 答案段不存在');
+          if (new Set(s.items.map(x => x.a)).size !== 5) throw new Error(theme + ' 答案应落在5个不同段落');
+          if (!it.stmt || it.stmt.length < 30 || /\{np\}/.test(it.stmt)) throw new Error(theme + ' 题' + (i+1) + ' 匹配句异常');
+          if (!it.exp || it.exp.length < 15) throw new Error(theme + ' 题' + (i+1) + ' 解析缺失');
+        });
+      }
+    }
+    // 两次生成 id 不同（内容随段序与名词短语填充变化）
+    const a = App.Gen.makeMatching('tech'), b = App.Gen.makeMatching('tech');
+    if (a.id === b.id) throw new Error('两次生成应不同');
+    // 入库后：长篇阅读页展示生成题源区，点击可进入练习并渲染 5 个选择框
+    App.store.genBank.push({ id: a.id, type: 'matching', theme: 'tech', date: App.today(), set: a });
+    App.go('reading', { type: 'matching' });
+    if (!viewText().includes('智能生成题源')) throw new Error('长篇阅读页应展示生成题源区');
+    const card = document.querySelector('#view [data-gen]');
+    if (!card) throw new Error('应显示长篇生成题卡片');
+    card.click();
+    if (!$('#view .passage')) throw new Error('点击生成题应进入长篇练习');
+    const sels = document.querySelectorAll('#view select');
+    if (sels.length < 5) throw new Error('应渲染段落选择框，实际 ' + sels.length);
   });
 
   })(window.__E2E);

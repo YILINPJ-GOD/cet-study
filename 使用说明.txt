@@ -94,5 +94,5 @@
 【发音】
 🔊 使用 Windows 系统语音，可在首页设置切换美音/英音；首次无声请等 1-2 秒再点。
 
-版本 v1.2.0 · 数据键：localStorage cet6app_v1 + IndexedDB cet_audio
+版本 v1.9.0 · 数据键：localStorage cet6app_v1 + IndexedDB cet_audio
 开源地址：https://github.com/YILINPJ-GOD/cet-study
